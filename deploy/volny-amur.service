@@ -1,0 +1,17 @@
+[Unit]
+Description=Volny Amur Django application
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/volny-amur
+EnvironmentFile=/etc/volny-amur.env
+RuntimeDirectory=volny-amur
+RuntimeDirectoryMode=0755
+ExecStart=/opt/volny-amur/.venv/bin/gunicorn --workers 2 --timeout 30 --graceful-timeout 10 --max-requests 500 --max-requests-jitter 50 --bind unix:/run/volny-amur/gunicorn.sock --access-logfile - --error-logfile - amur_site.wsgi:application
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

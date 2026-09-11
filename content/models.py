@@ -1,0 +1,112 @@
+from django.db import models
+import uuid
+
+class SiteSettings(models.Model):
+    hero_eyebrow = models.CharField("Надзаголовок", max_length=160, default="Хабаровский край · Дальний Восток")
+    hero_title = models.CharField("Главный заголовок", max_length=160, default="Там, где начинается настоящее")
+    hero_text = models.TextField("Описание", default="Авторские путешествия в места, где тайга встречается с океаном, а каждый день становится историей.")
+    advantages_title = models.CharField("Заголовок преимуществ", max_length=160, default="Дальше — только настоящее")
+    routes_title = models.CharField("Заголовок маршрутов", max_length=160, default="Выберите своё направление")
+    guides_title = models.CharField("Заголовок команды", max_length=160, default="Люди, которым доверяют путь")
+    request_title = models.CharField("Заголовок формы", max_length=160, default="Ваше приключение начинается здесь")
+    request_text = models.TextField("Текст формы", default="Оставьте контакты — наш эксперт позвонит и поможет выбрать идеальный маршрут.")
+    email = models.EmailField("E-mail", default="hello@volniyamur.ru")
+    phone = models.CharField("Телефон", max_length=40, default="+7 4212 99-00-48")
+    booking_deposit = models.DecimalField("Предоплата за бронирование", max_digits=10, decimal_places=2, default=5000)
+
+    class Meta:
+        verbose_name = "Общие настройки"
+        verbose_name_plural = "Общие настройки"
+
+    def __str__(self): return "Тексты и контакты сайта"
+
+class OrderedActiveModel(models.Model):
+    order = models.PositiveIntegerField("Порядок", default=0)
+    is_active = models.BooleanField("Показывать на сайте", default=True)
+    class Meta:
+        abstract = True
+        ordering = ("order", "id")
+
+class Advantage(OrderedActiveModel):
+    title = models.CharField("Название", max_length=120)
+    text = models.TextField("Описание")
+    icon = models.CharField("Символ", max_length=8, default="⌖")
+    class Meta(OrderedActiveModel.Meta):
+        verbose_name = "Преимущество"
+        verbose_name_plural = "Преимущества"
+    def __str__(self): return self.title
+
+class Route(OrderedActiveModel):
+    title = models.CharField("Название", max_length=120)
+    tag = models.CharField("Тип путешествия", max_length=40)
+    days = models.CharField("Продолжительность", max_length=40)
+    level = models.CharField("Сложность", max_length=40)
+    price = models.CharField("Цена", max_length=80)
+    season = models.CharField("Сезон", max_length=80)
+    text = models.TextField("Описание")
+    visual_style = models.CharField("Стиль иллюстрации", max_length=20, choices=[("ocean","Океан"),("mountain","Горы"),("forest","Лес"),("river","Река")], default="forest")
+    image_url = models.URLField("Ссылка на фотографию", blank=True, help_text="Необязательно: прямая https-ссылка на изображение")
+    class Meta(OrderedActiveModel.Meta):
+        verbose_name = "Маршрут"
+        verbose_name_plural = "Маршруты"
+    def __str__(self): return self.title
+
+class Guide(OrderedActiveModel):
+    name = models.CharField("Имя", max_length=100)
+    role = models.CharField("Специализация", max_length=100)
+    experience = models.CharField("Опыт", max_length=100)
+    quote = models.CharField("Короткая цитата", max_length=180)
+    initials = models.CharField("Инициалы", max_length=4)
+    color = models.CharField("Цвет карточки", max_length=20, choices=[("green","Зелёный"),("blue","Голубой"),("dark","Тёмный")], default="green")
+    image_url = models.URLField("Ссылка на фотографию", blank=True, help_text="Необязательно: прямая https-ссылка на изображение")
+    class Meta(OrderedActiveModel.Meta):
+        verbose_name = "Специалист"
+        verbose_name_plural = "Наши специалисты"
+    def __str__(self): return self.name
+
+class Lead(models.Model):
+    STATUS = [("new","Новая"),("contacted","Связались"),("confirmed","Подтверждена"),("closed","Закрыта")]
+    name = models.CharField("Имя", max_length=100)
+    phone = models.CharField("Телефон", max_length=40)
+    email = models.EmailField("E-mail", blank=True)
+    route = models.CharField("Маршрут", max_length=120)
+    status = models.CharField("Статус", max_length=20, choices=STATUS, default="new")
+    notes = models.TextField("Заметки менеджера", blank=True)
+    payment = models.OneToOneField("Payment", verbose_name="Платёж", on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField("Дата заявки", auto_now_add=True)
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Заявка"
+        verbose_name_plural = "Заявки"
+    def __str__(self): return f"{self.name} — {self.route}"
+
+class Payment(models.Model):
+    STATUS = [
+        ("created", "Создан локально"),
+        ("pending", "Ожидает оплаты"),
+        ("succeeded", "Оплачен"),
+        ("canceled", "Отменён"),
+        ("error", "Ошибка"),
+    ]
+    public_id = models.UUIDField("Номер бронирования", default=uuid.uuid4, unique=True, editable=False)
+    yookassa_id = models.CharField("ID платежа ЮKassa", max_length=64, blank=True, unique=True, null=True)
+    idempotence_key = models.UUIDField("Ключ идемпотентности", default=uuid.uuid4, unique=True, editable=False)
+    name = models.CharField("Имя", max_length=100)
+    phone = models.CharField("Телефон", max_length=40)
+    email = models.EmailField("E-mail")
+    route = models.CharField("Маршрут", max_length=120)
+    amount = models.DecimalField("Сумма", max_digits=10, decimal_places=2)
+    status = models.CharField("Статус", max_length=20, choices=STATUS, default="created")
+    paid = models.BooleanField("Оплачен", default=False)
+    cancellation_reason = models.CharField("Причина отмены", max_length=160, blank=True)
+    customer_ip = models.GenericIPAddressField("IP клиента", null=True, blank=True)
+    created_at = models.DateTimeField("Создан", auto_now_add=True)
+    updated_at = models.DateTimeField("Обновлён", auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Платёж"
+        verbose_name_plural = "Платежи ЮKassa"
+
+    def __str__(self):
+        return f"{self.public_id} — {self.amount} ₽"
