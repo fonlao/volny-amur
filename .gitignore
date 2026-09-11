@@ -1,0 +1,12 @@
+node_modules/
+dist/
+data/
+*.log
+__pycache__/
+.venv/
+db.sqlite3
+staticfiles/
+.env
+.env.*
+!.env.example
+.figma-qa/
