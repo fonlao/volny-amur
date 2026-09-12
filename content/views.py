@@ -1,6 +1,7 @@
 import json
 import re
 import base64
+import logging
 import urllib.error
 import urllib.request
 from threading import Thread
@@ -8,21 +9,73 @@ from pathlib import Path
 from decimal import Decimal
 from datetime import timedelta
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
+from django.db import close_old_connections, transaction
 from django.http import FileResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from .models import SiteSettings, Advantage, Route, Guide, Lead, Payment
 
-def send_lead_notification(name, phone, route):
-    send_mail(
-        f"Новая заявка: {route}",
-        f"Имя: {name}\nТелефон: {phone}\nМаршрут: {route}",
-        settings.DEFAULT_FROM_EMAIL,
-        [settings.LEAD_NOTIFICATION_EMAIL],
-        fail_silently=True,
-    )
+logger = logging.getLogger(__name__)
+
+def send_lead_notification(lead_id):
+    close_old_connections()
+    try:
+        lead = Lead.objects.get(pk=lead_id)
+        lead.notification_attempted_at = timezone.now()
+        lead.notification_error = ""
+        lead.save(update_fields=("notification_attempted_at", "notification_error"))
+
+        if not settings.LEAD_NOTIFICATION_EMAIL:
+            raise RuntimeError("Не задан LEAD_NOTIFICATION_EMAIL")
+        if not settings.EMAIL_HOST_PASSWORD:
+            raise RuntimeError("Не задан пароль SMTP")
+
+        base_url = settings.PUBLIC_BASE_URL.rstrip("/")
+        admin_url = f"{base_url}/admin/content/lead/{lead.pk}/change/" if base_url else ""
+        created = timezone.localtime(lead.created_at).strftime("%d.%m.%Y %H:%M")
+        subject = f"Новая заявка с сайта: {lead.route}"
+        body = (
+            "На сайте «Вольный Амур» оставлена новая заявка.\n\n"
+            f"Имя: {lead.name}\n"
+            f"Телефон: {lead.phone}\n"
+            f"E-mail: {lead.email or 'не указан'}\n"
+            f"Маршрут: {lead.route}\n"
+            f"Дата: {created}\n"
+            f"Источник: {'оплата ЮKassa' if lead.payment_id else 'форма сайта'}\n"
+        )
+        if admin_url:
+            body += f"\nОткрыть заявку в админке:\n{admin_url}\n"
+
+        message = EmailMultiAlternatives(
+            subject=subject,
+            body=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[settings.LEAD_NOTIFICATION_EMAIL],
+            reply_to=[lead.email] if lead.email else None,
+        )
+        result = message.send(fail_silently=False)
+        if result != 1:
+            raise RuntimeError("Почтовый сервер не подтвердил отправку")
+
+        lead.notification_sent_at = timezone.now()
+        lead.notification_error = ""
+        lead.save(update_fields=("notification_sent_at", "notification_error"))
+        logger.info("Lead notification sent for lead_id=%s", lead.pk)
+        return True
+    except Exception as error:
+        logger.exception("Lead notification failed for lead_id=%s", lead_id)
+        Lead.objects.filter(pk=lead_id).update(
+            notification_attempted_at=timezone.now(),
+            notification_error=str(error)[:1000],
+        )
+        return False
+    finally:
+        close_old_connections()
+
+def queue_lead_notification(lead_id):
+    Thread(target=send_lead_notification, args=(lead_id,), daemon=True).start()
 
 def yookassa_request(method, path, payload=None, idempotence_key=None):
     if not settings.YOOKASSA_SHOP_ID or not settings.YOOKASSA_SECRET_KEY:
@@ -67,7 +120,7 @@ def update_payment_from_yookassa(payment):
     payment.cancellation_reason = cancellation.get("reason", "")
     payment.save(update_fields=("status", "paid", "cancellation_reason", "updated_at"))
     if payment.paid:
-        Lead.objects.get_or_create(
+        lead, created = Lead.objects.get_or_create(
             payment=payment,
             defaults={
                 "name": payment.name,
@@ -78,6 +131,8 @@ def update_payment_from_yookassa(payment):
                 "notes": "Создано автоматически после оплаты через ЮKassa.",
             },
         )
+        if created:
+            transaction.on_commit(lambda: queue_lead_notification(lead.pk))
     return payment
 
 def frontend(request):
@@ -102,9 +157,8 @@ def request_api(request):
         name, phone, email, route = (str(data.get(k, "")).strip() for k in ("name", "phone", "email", "route"))
         if len(name) < 2 or not re.fullmatch(r"[+0-9 ()-]{7,}", phone) or not route:
             return JsonResponse({"message": "Проверьте имя и номер телефона."}, status=400)
-        Lead.objects.create(name=name, phone=phone, email=email, route=route)
-        if settings.EMAIL_HOST_PASSWORD and settings.LEAD_NOTIFICATION_EMAIL:
-            Thread(target=send_lead_notification, args=(name, phone, route), daemon=True).start()
+        lead = Lead.objects.create(name=name, phone=phone, email=email, route=route)
+        transaction.on_commit(lambda: queue_lead_notification(lead.pk))
         return JsonResponse({"ok": True, "message": "Заявка принята"}, status=201)
     except (ValueError, json.JSONDecodeError):
         return JsonResponse({"message": "Некорректные данные."}, status=400)

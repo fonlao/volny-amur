@@ -31,11 +31,26 @@ class GuideAdmin(OrderedAdmin):
 
 @admin.register(Lead)
 class LeadAdmin(admin.ModelAdmin):
-    list_display = ("name", "phone", "email", "route", "status", "payment", "created_at")
-    list_filter = ("status", "route", "created_at")
+    list_display = ("name", "phone", "email", "route", "status", "notification_state", "payment", "created_at")
+    list_filter = ("status", "notification_sent_at", "route", "created_at")
     search_fields = ("name", "phone", "route")
     list_editable = ("status",)
-    readonly_fields = ("created_at",)
+    readonly_fields = ("created_at", "notification_sent_at", "notification_attempted_at", "notification_error")
+    actions = ("resend_notifications",)
+
+    @admin.display(description="Уведомление")
+    def notification_state(self, obj):
+        if obj.notification_sent_at:
+            return "Отправлено"
+        if obj.notification_error:
+            return "Ошибка"
+        return "Ожидает"
+
+    @admin.action(description="Отправить уведомление повторно")
+    def resend_notifications(self, request, queryset):
+        from .views import send_lead_notification
+        sent = sum(1 for lead in queryset if send_lead_notification(lead.pk))
+        self.message_user(request, f"Отправлено уведомлений: {sent} из {queryset.count()}")
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
