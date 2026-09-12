@@ -1,9 +1,13 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 
 const menuOpen = ref(false)
 const activeRoute = ref(0)
+const activeMapRoute = ref(0)
 const activeFaq = ref(0)
+const mapElement = ref(null)
 const sending = ref(false)
 const status = ref('')
 const paymentLoading = ref(false)
@@ -26,10 +30,10 @@ const advantages = ref([
 ])
 
 const routes = ref([
-  { number: '01', title: 'Шантарские острова', tag: 'Экспедиция', days: '8 дней', level: 'Средний', price: 'от 168 000 ₽', season: 'июль — сентябрь', text: 'Киты в Охотском море, лежбища тюленей и дикие бухты архипелага. Добираемся катером и живём в тёплом глэмпинге.', art: 'ocean' },
-  { number: '02', title: 'Дуссе-Алинь', tag: 'Треккинг', days: '10 дней', level: 'Сложный', price: 'от 124 000 ₽', season: 'июнь — август', text: 'Горные озёра, водопады и каменные цирки заповедного хребта. Настоящая автономная экспедиция с опытным проводником.', art: 'mountain' },
-  { number: '03', title: 'По следам тигра', tag: 'Экотур', days: '5 дней', level: 'Лёгкий', price: 'от 76 000 ₽', season: 'февраль — март', text: 'Зимняя тайга Сихотэ-Алиня, следы амурского тигра и ночёвки на кордоне. Наблюдаем природу бережно и с безопасной дистанции.', art: 'forest' },
-  { number: '04', title: 'Амурские протоки', tag: 'Сплав', days: '4 дня', level: 'Лёгкий', price: 'от 49 000 ₽', season: 'май — октябрь', text: 'Неторопливое путешествие на каяках среди островов великой реки, рыбацких сёл и дальневосточных закатов.', art: 'river' }
+  { number: '01', title: 'Шантарские острова', tag: 'Экспедиция', days: '8 дней', level: 'Средний', price: 'от 168 000 ₽', season: 'июль — сентябрь', text: 'Киты в Охотском море, лежбища тюленей и дикие бухты архипелага. Добираемся катером и живём в тёплом глэмпинге.', art: 'ocean', start_location: 'Комсомольск-на-Амуре', start_latitude: 50.549923, start_longitude: 137.007948 },
+  { number: '02', title: 'Дуссе-Алинь', tag: 'Треккинг', days: '10 дней', level: 'Сложный', price: 'от 124 000 ₽', season: 'июнь — август', text: 'Горные озёра, водопады и каменные цирки заповедного хребта. Настоящая автономная экспедиция с опытным проводником.', art: 'mountain', start_location: 'Посёлок Бриакан', start_latitude: 50.711744, start_longitude: 134.066509 },
+  { number: '03', title: 'По следам тигра', tag: 'Экотур', days: '5 дней', level: 'Лёгкий', price: 'от 76 000 ₽', season: 'февраль — март', text: 'Зимняя тайга Сихотэ-Алиня, следы амурского тигра и ночёвки на кордоне. Наблюдаем природу бережно и с безопасной дистанции.', art: 'forest', start_location: 'Хабаровск', start_latitude: 48.480223, start_longitude: 135.071917 },
+  { number: '04', title: 'Амурские протоки', tag: 'Сплав', days: '4 дня', level: 'Лёгкий', price: 'от 49 000 ₽', season: 'май — октябрь', text: 'Неторопливое путешествие на каяках среди островов великой реки, рыбацких сёл и дальневосточных закатов.', art: 'river', start_location: 'Хабаровск, набережная Амура', start_latitude: 48.472607, start_longitude: 135.052664 }
 ])
 
 const guides = ref([
@@ -45,6 +49,75 @@ const faqs = [
   { question: 'Можно ли путешествовать с детьми?', answer: 'Да, для семей подходят маршруты лёгкого уровня. Возраст ребёнка и формат поездки лучше заранее обсудить со специалистом — мы предложим комфортную программу.' },
   { question: 'Как забронировать место?', answer: 'Оставьте заявку на сайте. Мы свяжемся с вами, ответим на вопросы, подтвердим доступные даты и отправим договор с условиями бронирования.' }
 ]
+
+let routeMap = null
+const routeMarkers = new Map()
+
+function mappedRoutes() {
+  return routes.value
+    .map((route, index) => ({
+      route,
+      index,
+      lat: Number(route.start_latitude),
+      lng: Number(route.start_longitude)
+    }))
+    .filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng))
+}
+
+function initRouteMap() {
+  if (!mapElement.value) return
+  if (routeMap) routeMap.remove()
+  routeMarkers.clear()
+  const points = mappedRoutes()
+  if (!points.length) return
+
+  routeMap = L.map(mapElement.value, {
+    scrollWheelZoom: false,
+    zoomControl: true,
+    attributionControl: true
+  })
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(routeMap)
+
+  const bounds = []
+  points.forEach(({ route, index, lat, lng }) => {
+    const icon = L.divIcon({
+      className: 'route-map-marker-wrap',
+      html: `<span class="route-map-marker"><b>${String(index + 1).padStart(2, '0')}</b></span>`,
+      iconSize: [44, 44],
+      iconAnchor: [22, 22],
+      popupAnchor: [0, -18]
+    })
+    const popup = document.createElement('div')
+    popup.className = 'route-map-popup'
+    const title = document.createElement('strong')
+    title.textContent = route.title
+    const location = document.createElement('span')
+    location.textContent = `Старт: ${route.start_location || 'точка указана на карте'}`
+    popup.append(title, location)
+    const marker = L.marker([lat, lng], { icon }).addTo(routeMap).bindPopup(popup)
+    marker.on('click', () => { activeMapRoute.value = index })
+    routeMarkers.set(index, marker)
+    bounds.push([lat, lng])
+  })
+  routeMap.fitBounds(bounds, { padding: [55, 55], maxZoom: 8 })
+}
+
+function focusMapRoute(index) {
+  const item = mappedRoutes().find(point => point.index === index)
+  const marker = routeMarkers.get(index)
+  if (!item || !routeMap || !marker) return
+  activeMapRoute.value = index
+  routeMap.flyTo([item.lat, item.lng], Math.max(routeMap.getZoom(), 7), { duration: 0.8 })
+  marker.openPopup()
+}
+
+function openRouteFromMap(index) {
+  activeRoute.value = index
+  scrollTo('routes')
+}
 
 function splitTitle(text) {
   const words = (text || '').trim().split(/\s+/)
@@ -66,7 +139,14 @@ onMounted(async () => {
     if (data.guides?.length) guides.value = data.guides.map(item => ({ ...item, exp: item.experience }))
   } catch (_) {
     // Встроенное содержимое остаётся доступным, если API временно недоступен.
+  } finally {
+    await nextTick()
+    initRouteMap()
   }
+})
+
+onBeforeUnmount(() => {
+  if (routeMap) routeMap.remove()
 })
 
 function scrollTo(id) {
@@ -140,7 +220,7 @@ onMounted(checkPayment)
     <header class="header">
       <a class="logo" href="#top" aria-label="Вольный Амур — главная"><span class="logo-mark">⌁</span><span>ВОЛЬНЫЙ<br><b>АМУР</b></span></a>
       <nav :class="['nav', { open: menuOpen }]">
-        <button @click="scrollTo('advantages')">О нас</button><button @click="scrollTo('routes')">Маршруты</button><button @click="scrollTo('guides')">Наши специалисты</button>
+        <button @click="scrollTo('advantages')">О нас</button><button @click="scrollTo('routes')">Маршруты</button><button @click="scrollTo('route-map')">Карта</button><button @click="scrollTo('guides')">Наши специалисты</button>
       </nav>
       <button class="header-cta" @click="scrollTo('request')">Подобрать маршрут <span>↗</span></button>
       <button class="menu" @click="menuOpen = !menuOpen" aria-label="Меню">{{ menuOpen ? '×' : '☰' }}</button>
@@ -189,8 +269,30 @@ onMounted(checkPayment)
         </div>
       </section>
 
+      <section id="route-map" class="map-section section-pad">
+        <div class="section-kicker">04 / КАРТА МАРШРУТОВ</div>
+        <div class="map-heading">
+          <h2>Откуда начинается<br><em>ваше путешествие</em></h2>
+          <p>Выберите точку на карте, чтобы увидеть место сбора и перейти к описанию маршрута.</p>
+        </div>
+        <div class="map-layout">
+          <div ref="mapElement" class="route-map" aria-label="Карта точек начала туристических маршрутов"></div>
+          <div class="map-route-list">
+            <article v-for="(route, index) in routes" :key="`map-${route.title}`" :class="{ active: activeMapRoute === index }">
+              <button class="map-route-main" @click="focusMapRoute(index)">
+                <span>{{ route.number }}</span>
+                <div><strong>{{ route.title }}</strong><small>{{ route.start_location || 'Точка старта уточняется' }}</small></div>
+                <i>⌖</i>
+              </button>
+              <button class="map-route-link" @click="openRouteFromMap(index)">О маршруте ↗</button>
+            </article>
+          </div>
+        </div>
+        <p class="map-caption">Карта: © участники OpenStreetMap. Точная точка встречи подтверждается специалистом перед поездкой.</p>
+      </section>
+
       <section id="guides" class="guides section-pad">
-        <div class="section-kicker">04 / НАШИ СПЕЦИАЛИСТЫ</div>
+        <div class="section-kicker">05 / НАШИ СПЕЦИАЛИСТЫ</div>
         <div class="section-heading"><h2>{{ splitTitle(site.guides_title).lead }}<br><em>{{ splitTitle(site.guides_title).accent }}</em></h2><p>Наши гиды не просто показывают дорогу. Они помогают почувствовать место.</p></div>
         <div class="guide-grid">
           <article v-for="guide in guides" :key="guide.name">
@@ -201,7 +303,7 @@ onMounted(checkPayment)
       </section>
 
       <section id="faq" class="faq section-pad">
-        <div class="section-kicker">05 / ВАЖНО ЗНАТЬ</div>
+        <div class="section-kicker">06 / ВАЖНО ЗНАТЬ</div>
         <div class="faq-layout">
           <div class="faq-intro">
             <h2>Ответы на<br><em>частые вопросы</em></h2>
@@ -222,7 +324,7 @@ onMounted(checkPayment)
       </section>
 
       <section id="request" class="request section-pad">
-        <div class="request-copy"><div class="section-kicker light">06 / НАЧНЁМ?</div><h2>{{ splitTitle(site.request_title).lead }}<br><em>{{ splitTitle(site.request_title).accent }}</em></h2><p>{{ site.request_text }}</p><div class="contact-line"><span>или напишите нам</span><a :href="`mailto:${site.email}`">{{ site.email }}</a><a :href="`tel:${site.phone.replace(/[^+\d]/g, '')}`">{{ site.phone }}</a></div></div>
+        <div class="request-copy"><div class="section-kicker light">07 / НАЧНЁМ?</div><h2>{{ splitTitle(site.request_title).lead }}<br><em>{{ splitTitle(site.request_title).accent }}</em></h2><p>{{ site.request_text }}</p><div class="contact-line"><span>или напишите нам</span><a :href="`mailto:${site.email}`">{{ site.email }}</a><a :href="`tel:${site.phone.replace(/[^+\d]/g, '')}`">{{ site.phone }}</a></div></div>
         <form class="request-form" @submit.prevent="submitForm">
           <label>Как вас зовут?<input v-model.trim="form.name" required minlength="2" placeholder="Ваше имя"></label>
           <label>Телефон<input v-model.trim="form.phone" required pattern="[+0-9 ()-]{7,}" placeholder="+7 999 000-00-00"></label>
