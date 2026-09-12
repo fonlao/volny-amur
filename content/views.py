@@ -145,7 +145,10 @@ def content_api(request):
     return JsonResponse({
         "site": {f.name: getattr(site, f.name) for f in site._meta.fields if f.name != "id"},
         "advantages": list(Advantage.objects.filter(is_active=True).values("title", "text", "icon")),
-        "routes": list(Route.objects.filter(is_active=True).values("title", "tag", "days", "level", "price", "season", "text", "visual_style", "image_url")),
+        "routes": list(Route.objects.filter(is_active=True).values(
+            "title", "tag", "days", "level", "price", "season", "text",
+            "visual_style", "image_url", "start_location", "start_latitude", "start_longitude",
+        )),
         "guides": list(Guide.objects.filter(is_active=True).values("name", "role", "experience", "quote", "initials", "color", "image_url")),
     }, json_dumps_params={"ensure_ascii": False})
 

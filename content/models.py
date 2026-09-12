@@ -46,6 +46,15 @@ class Route(OrderedActiveModel):
     text = models.TextField("Описание")
     visual_style = models.CharField("Стиль иллюстрации", max_length=20, choices=[("ocean","Океан"),("mountain","Горы"),("forest","Лес"),("river","Река")], default="forest")
     image_url = models.URLField("Ссылка на фотографию", blank=True, help_text="Необязательно: прямая https-ссылка на изображение")
+    start_location = models.CharField("Точка начала маршрута", max_length=160, blank=True)
+    start_latitude = models.DecimalField(
+        "Широта точки старта", max_digits=9, decimal_places=6, null=True, blank=True,
+        help_text="Например: 48.480223",
+    )
+    start_longitude = models.DecimalField(
+        "Долгота точки старта", max_digits=9, decimal_places=6, null=True, blank=True,
+        help_text="Например: 135.071917",
+    )
     class Meta(OrderedActiveModel.Meta):
         verbose_name = "Маршрут"
         verbose_name_plural = "Маршруты"

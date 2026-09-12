@@ -22,8 +22,14 @@ class AdvantageAdmin(OrderedAdmin): pass
 
 @admin.register(Route)
 class RouteAdmin(OrderedAdmin):
-    list_display = ("title", "tag", "days", "price", "order", "is_active")
-    search_fields = ("title", "text")
+    list_display = ("title", "start_location", "tag", "days", "price", "order", "is_active")
+    search_fields = ("title", "text", "start_location")
+    fieldsets = (
+        ("Основная информация", {"fields": ("title", "tag", "days", "level", "price", "season", "text")}),
+        ("Изображение", {"fields": ("visual_style", "image_url")}),
+        ("Начало маршрута на карте", {"fields": ("start_location", "start_latitude", "start_longitude")}),
+        ("Публикация", {"fields": ("order", "is_active")}),
+    )
 
 @admin.register(Guide)
 class GuideAdmin(OrderedAdmin):
