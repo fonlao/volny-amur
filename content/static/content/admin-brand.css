@@ -258,6 +258,28 @@ a:hover, a:focus { color: var(--brand-hover); }
   color: var(--brand-muted);
   font-size: 10px;
 }
+.stat-card-accent { border-top: 3px solid var(--brand-green); }
+.analytics-panel {
+  margin: 0 0 32px;
+  padding: 28px;
+  border: 1px solid var(--brand-line);
+  border-radius: 14px;
+  background: var(--brand-surface);
+  box-shadow: var(--brand-shadow);
+}
+.analytics-header { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; }
+.analytics-header h2 { margin: 8px 0; font-size: 22px; }
+.analytics-header p:not(.dashboard-eyebrow) { margin:0; color:var(--brand-muted); font-size:11px; }
+.analytics-header a { color:var(--brand-green); font-size:11px; font-weight:700; text-decoration:none; }
+.analytics-chart { height:190px; display:flex; align-items:end; gap:clamp(10px,2vw,28px); padding:28px 10px 0; border-bottom:1px solid var(--brand-line); }
+.chart-column { height:100%; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:end; gap:8px; }
+.chart-column span { color:var(--brand-muted); font-size:10px; }
+.chart-column i { width:clamp(18px,3vw,44px); min-height:2px; border-radius:6px 6px 0 0; background:linear-gradient(180deg,var(--brand-lime),var(--brand-green)); }
+.chart-column small { transform:translateY(20px); color:var(--brand-muted); font-size:9px; }
+.top-pages { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:25px; color:var(--brand-muted); font-size:10px; }
+.top-pages strong { color:var(--brand-ink); margin-right:8px; }
+.top-pages span { padding:7px 9px; border-radius:7px; background:var(--brand-sky); }
+.top-pages b { color:var(--brand-green); }
 .dashboard-groups {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -449,6 +471,8 @@ body.login #login-form input[type="password"] { width: 100%; }
   .stat-card { min-height: 130px; padding: 16px; }
   .stat-card strong { font-size: 30px; }
   .dashboard-group { padding: 20px; }
+  .analytics-panel { padding:20px 16px; }
+  .analytics-header { flex-direction:column; }
   #changelist #toolbar form input[type="text"] { min-width: 0; }
 }
 @media (max-width: 480px) {

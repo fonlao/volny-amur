@@ -14,6 +14,11 @@
 </div>
 
 <div class="dashboard-stats">
+  <a class="stat-card stat-card-accent" href="{% url 'admin:content_visit_changelist' %}">
+    <span class="stat-label">Посещения сегодня</span>
+    <strong>{{ dashboard_stats.visits_today }}</strong>
+    <small>{{ dashboard_stats.unique_today }} уникальных посетителя ↗</small>
+  </a>
   <a class="stat-card" href="{% url 'admin:content_lead_changelist' %}">
     <span class="stat-label">Новые заявки</span>
     <strong>{{ dashboard_stats.new_leads }}</strong>
@@ -40,6 +45,25 @@
     <small>Календарь маршрутов ↗</small>
   </a>
 </div>
+
+<section class="analytics-panel" aria-labelledby="analytics-title">
+  <div class="analytics-header">
+    <div>
+      <p class="dashboard-eyebrow">АНАЛИТИКА</p>
+      <h2 id="analytics-title">Посещения за 7 дней</h2>
+      <p>{{ dashboard_stats.visits_7_days }} просмотров · данные хранятся локально</p>
+    </div>
+    <a href="{% url 'admin:content_visit_changelist' %}">Все посещения ↗</a>
+  </div>
+  <div class="analytics-chart" role="img" aria-label="График посещений за последние 7 дней">
+    {% for item in dashboard_stats.daily_visits %}
+    <div class="chart-column"><span>{{ item.value }}</span><i style="height: {{ item.height }}%"></i><small>{{ item.label }}</small></div>
+    {% endfor %}
+  </div>
+  {% if dashboard_stats.top_pages %}
+  <div class="top-pages"><strong>Популярные страницы</strong>{% for page in dashboard_stats.top_pages %}<span>{{ page.path }} <b>{{ page.total }}</b></span>{% endfor %}</div>
+  {% endif %}
+</section>
 
 <div class="dashboard-groups">
   <section class="dashboard-group" aria-labelledby="content-group">

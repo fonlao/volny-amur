@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import SiteSettings, Advantage, Route, RouteDeparture, Guide, Lead, Payment
+from .models import SiteSettings, Advantage, Route, RouteDeparture, Guide, Lead, Payment, Visit
 
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
@@ -127,4 +127,17 @@ class PaymentAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
+        return False
+
+@admin.register(Visit)
+class VisitAdmin(admin.ModelAdmin):
+    list_display = ("day", "path", "created_at")
+    list_filter = ("day", "path")
+    search_fields = ("path",)
+    readonly_fields = ("day", "path", "session_key", "created_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
         return False

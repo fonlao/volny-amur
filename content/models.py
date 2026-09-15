@@ -104,6 +104,25 @@ class RouteDeparture(models.Model):
     def __str__(self):
         return f"{self.route.title} — {self.start_date:%d.%m.%Y}"
 
+
+class Visit(models.Model):
+    day = models.DateField("День")
+    path = models.CharField("Страница", max_length=255)
+    session_key = models.CharField("Анонимная сессия", max_length=40)
+    created_at = models.DateTimeField("Время визита", auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Посещение"
+        verbose_name_plural = "Посещения сайта"
+        indexes = [
+            models.Index(fields=("day", "path")),
+            models.Index(fields=("day", "session_key")),
+        ]
+
+    def __str__(self):
+        return f"{self.day} — {self.path}"
+
 class Guide(OrderedActiveModel):
     name = models.CharField("Имя", max_length=100)
     role = models.CharField("Специализация", max_length=100)
