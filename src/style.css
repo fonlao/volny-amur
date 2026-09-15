@@ -37,7 +37,11 @@ h1,h2 { font-family:'Montserrat',Arial,sans-serif; font-weight:700; margin:0; le
 .map-heading h2 em { color:var(--forest); font-style:normal; font-weight:500; }
 .map-heading p { max-width:430px; color:#61716c; line-height:1.75; }
 .map-layout { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(300px,.7fr); min-height:570px; border:1px solid #bdc8c3; background:white; }
-.route-map { min-height:570px; z-index:1; background:#dbe9e5; }
+.route-map-shell { position:relative; min-width:0; min-height:570px; background:#dbe9e5; }
+.route-map { width:100%; min-height:570px; z-index:1; background:#dbe9e5; }
+.map-message { position:absolute; z-index:2; inset:0; display:grid; place-content:center; justify-items:center; gap:12px; padding:32px; background:linear-gradient(145deg,#dbe9e5,#bdd7ce); color:#10251f; text-align:center; }
+.map-message strong { font-size:24px; }
+.map-message span { max-width:460px; font-size:13px; line-height:1.7; }
 .map-route-list { border-left:1px solid #bdc8c3; }
 .map-route-list article { border-bottom:1px solid #bdc8c3; padding:0 24px; transition:background .2s ease; }
 .map-route-list article.active { background:var(--ice); }
@@ -49,15 +53,7 @@ h1,h2 { font-family:'Montserrat',Arial,sans-serif; font-weight:700; margin:0; le
 .map-route-main i { color:var(--forest); font-size:22px; font-style:normal; }
 .map-route-link { margin:0 0 17px 42px; border:0; padding:0; background:transparent; color:var(--forest); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; }
 .map-caption { margin:14px 0 0; color:#71817b; font-size:10px; line-height:1.5; }
-.route-map-marker-wrap { background:transparent; border:0; }
-.route-map-marker { width:44px; height:44px; border:3px solid white; border-radius:50% 50% 50% 10%; transform:rotate(-45deg); display:grid; place-items:center; background:var(--forest); color:white; box-shadow:0 6px 18px rgba(16,37,31,.3); font:700 11px 'Montserrat',Arial,sans-serif; }
-.route-map-marker b { transform:rotate(45deg); font-weight:700; }
-.route-map-popup { display:grid; gap:5px; font-family:'Montserrat',Arial,sans-serif; min-width:190px; }
-.route-map-popup strong { color:#10251f; font-size:14px; }
-.route-map-popup span { color:#61716c; font-size:11px; }
-.leaflet-popup-content-wrapper { border-radius:3px; box-shadow:0 10px 30px rgba(16,37,31,.22); }
-.leaflet-control-attribution { font-family:'Montserrat',Arial,sans-serif; font-size:9px; }
-.leaflet-control-attribution a { color:var(--forest); }
+.route-map [class*='balloon'] { font-family:'Montserrat',Arial,sans-serif; }
 .guides { background:var(--ice); }.guide-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:24px; }.guide-grid article { background:white; }.guide-photo { height:370px;display:grid;place-items:center;position:relative;overflow:hidden;background:linear-gradient(145deg,#a9d6c3,#3f7961); }.guide-photo.blue{background:linear-gradient(145deg,#acdce4,#417d84)}.guide-photo.dark{background:linear-gradient(145deg,#92a99e,#1d4135)}.guide-photo>span{width:130px;height:130px;border:1px solid rgba(255,255,255,.5);border-radius:50%;display:grid;place-items:center;font-family:'Prata';font-size:42px;color:white;z-index:2}.ridge{position:absolute;inset:62% -5% 0;background:#123e31;clip-path:polygon(0 100%,0 70%,20% 15%,37% 75%,56% 3%,73% 65%,91% 20%,100% 50%,100% 100%);opacity:.7}.guide-content{padding:28px}.guide-content small{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--forest)}.guide-content h3{font-family:'Prata';font-size:25px;font-weight:400;margin:12px 0}.guide-content p{color:#74827e;font-size:13px}.experience{display:inline-block;border:1px solid #bdcac5;padding:7px 10px;margin-top:12px;font-size:9px;text-transform:uppercase;letter-spacing:1px}
 .faq { background:var(--paper); }
 .faq-layout { display:grid; grid-template-columns:minmax(280px,.75fr) 1.25fr; gap:clamp(55px,9vw,140px); }
@@ -132,13 +128,8 @@ footer{background:#091b16;color:#a7b5b0;padding:45px clamp(24px,7vw,108px);displ
 :root[data-theme='dark'] .route-visual.has-image,
 :root[data-theme='dark'] .guide-photo.has-image,
 :root[data-theme='dark'] .route-map { background-color:#19342c; }
-:root[data-theme='dark'] .leaflet-layer { filter:brightness(.78) saturate(.72) contrast(1.08); }
-:root[data-theme='dark'] .leaflet-control-zoom a,
-:root[data-theme='dark'] .leaflet-control-attribution,
-:root[data-theme='dark'] .leaflet-popup-content-wrapper,
-:root[data-theme='dark'] .leaflet-popup-tip { background:#142a23; color:#eef6f1; }
-:root[data-theme='dark'] .route-map-popup strong { color:#eef6f1; }
-:root[data-theme='dark'] .route-map-popup span { color:#afc2ba; }
+:root[data-theme='dark'] .route-map { filter:brightness(.78) saturate(.8) contrast(1.06); }
+:root[data-theme='dark'] .map-message { background:linear-gradient(145deg,#19342c,#10251f); color:#eef6f1; }
 :root[data-theme='dark'] .form-status { background:#244332; color:#dff0cc!important; }
 :root[data-theme='dark'] .payment-button b { color:#b692ff; }
 :root[data-theme='dark'] footer { background:#05110e; }

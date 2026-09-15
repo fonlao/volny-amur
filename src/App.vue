@@ -1,13 +1,12 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
 
 const menuOpen = ref(false)
 const activeRoute = ref(0)
 const activeMapRoute = ref(0)
 const activeFaq = ref(0)
 const mapElement = ref(null)
+const mapMessage = ref('')
 const theme = ref('light')
 const sending = ref(false)
 const status = ref('')
@@ -53,6 +52,7 @@ const faqs = [
 
 let routeMap = null
 const routeMarkers = new Map()
+let yandexMapsPromise = null
 
 function mappedRoutes() {
   return routes.value
@@ -65,45 +65,56 @@ function mappedRoutes() {
     .filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng))
 }
 
-function initRouteMap() {
+function loadYandexMaps(apiKey) {
+  if (window.ymaps) return Promise.resolve(window.ymaps)
+  if (yandexMapsPromise) return yandexMapsPromise
+  yandexMapsPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = `https://api-maps.yandex.ru/2.1/?apikey=${encodeURIComponent(apiKey)}&lang=ru_RU`
+    script.async = true
+    script.onload = () => window.ymaps.ready(() => resolve(window.ymaps))
+    script.onerror = () => reject(new Error('Не удалось загрузить Яндекс Карты'))
+    document.head.appendChild(script)
+  })
+  return yandexMapsPromise
+}
+
+async function initRouteMap() {
   if (!mapElement.value) return
-  if (routeMap) routeMap.remove()
+  if (routeMap) routeMap.destroy()
   routeMarkers.clear()
   const points = mappedRoutes()
   if (!points.length) return
-
-  routeMap = L.map(mapElement.value, {
-    scrollWheelZoom: false,
-    zoomControl: true,
-    attributionControl: true
-  })
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-  }).addTo(routeMap)
-
-  const bounds = []
-  points.forEach(({ route, index, lat, lng }) => {
-    const icon = L.divIcon({
-      className: 'route-map-marker-wrap',
-      html: `<span class="route-map-marker"><b>${String(index + 1).padStart(2, '0')}</b></span>`,
-      iconSize: [44, 44],
-      iconAnchor: [22, 22],
-      popupAnchor: [0, -18]
+  if (!site.value.yandex_maps_api_key) {
+    mapMessage.value = 'Для отображения карты добавьте API-ключ Яндекс.Карт в общих настройках сайта.'
+    return
+  }
+  try {
+    const ymaps = await loadYandexMaps(site.value.yandex_maps_api_key)
+    mapMessage.value = ''
+    routeMap = new ymaps.Map(mapElement.value, {
+      center: [49.4, 135.4],
+      zoom: 6,
+      controls: ['zoomControl', 'fullscreenControl']
     })
-    const popup = document.createElement('div')
-    popup.className = 'route-map-popup'
-    const title = document.createElement('strong')
-    title.textContent = route.title
-    const location = document.createElement('span')
-    location.textContent = `Старт: ${route.start_location || 'точка указана на карте'}`
-    popup.append(title, location)
-    const marker = L.marker([lat, lng], { icon }).addTo(routeMap).bindPopup(popup)
-    marker.on('click', () => { activeMapRoute.value = index })
-    routeMarkers.set(index, marker)
-    bounds.push([lat, lng])
-  })
-  routeMap.fitBounds(bounds, { padding: [55, 55], maxZoom: 8 })
+    routeMap.behaviors.disable('scrollZoom')
+    points.forEach(({ route, index, lat, lng }) => {
+      const marker = new ymaps.Placemark([lat, lng], {
+        iconContent: String(index + 1).padStart(2, '0'),
+        balloonContentHeader: route.title,
+        balloonContentBody: `Старт: ${route.start_location || 'точка указана на карте'}`,
+        hintContent: route.title
+      }, {
+        preset: 'islands#darkGreenStretchyIcon'
+      })
+      marker.events.add('click', () => { activeMapRoute.value = index })
+      routeMap.geoObjects.add(marker)
+      routeMarkers.set(index, marker)
+    })
+    routeMap.setBounds(routeMap.geoObjects.getBounds(), { checkZoomRange: true, zoomMargin: 55 })
+  } catch (error) {
+    mapMessage.value = error.message
+  }
 }
 
 function focusMapRoute(index) {
@@ -111,8 +122,8 @@ function focusMapRoute(index) {
   const marker = routeMarkers.get(index)
   if (!item || !routeMap || !marker) return
   activeMapRoute.value = index
-  routeMap.flyTo([item.lat, item.lng], Math.max(routeMap.getZoom(), 7), { duration: 0.8 })
-  marker.openPopup()
+  routeMap.setCenter([item.lat, item.lng], Math.max(routeMap.getZoom(), 7), { duration: 500 })
+  marker.balloon.open()
 }
 
 function openRouteFromMap(index) {
@@ -165,7 +176,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  if (routeMap) routeMap.remove()
+  if (routeMap) routeMap.destroy()
 })
 
 function scrollTo(id) {
@@ -296,7 +307,10 @@ onMounted(checkPayment)
           <p>Выберите точку на карте, чтобы увидеть место сбора и перейти к описанию маршрута.</p>
         </div>
         <div class="map-layout">
-          <div ref="mapElement" class="route-map" aria-label="Карта точек начала туристических маршрутов"></div>
+          <div class="route-map-shell">
+            <div ref="mapElement" class="route-map" aria-label="Карта точек начала туристических маршрутов"></div>
+            <div v-if="mapMessage" class="map-message"><strong>Яндекс Карты</strong><span>{{ mapMessage }}</span></div>
+          </div>
           <div class="map-route-list">
             <article v-for="(route, index) in routes" :key="`map-${route.title}`" :class="{ active: activeMapRoute === index }">
               <button class="map-route-main" @click="focusMapRoute(index)">
@@ -308,7 +322,7 @@ onMounted(checkPayment)
             </article>
           </div>
         </div>
-        <p class="map-caption">Карта: © участники OpenStreetMap. Точная точка встречи подтверждается специалистом перед поездкой.</p>
+        <p class="map-caption">Карта предоставлена сервисом Яндекс.Карты. Точная точка встречи подтверждается специалистом перед поездкой.</p>
       </section>
 
       <section id="guides" class="guides section-pad">
