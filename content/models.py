@@ -126,6 +126,7 @@ class Lead(models.Model):
     status = models.CharField("Статус", max_length=20, choices=STATUS, default="new")
     notes = models.TextField("Заметки менеджера", blank=True)
     payment = models.OneToOneField("Payment", verbose_name="Платёж", on_delete=models.SET_NULL, null=True, blank=True)
+    departure = models.ForeignKey("RouteDeparture", verbose_name="Выбранный заезд", on_delete=models.SET_NULL, null=True, blank=True, related_name="leads")
     notification_sent_at = models.DateTimeField("Уведомление отправлено", null=True, blank=True)
     notification_attempted_at = models.DateTimeField("Последняя попытка отправки", null=True, blank=True)
     notification_error = models.TextField("Ошибка отправки", blank=True)

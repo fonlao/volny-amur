@@ -67,7 +67,7 @@ class GuideAdmin(OrderedAdmin):
 
 @admin.register(Lead)
 class LeadAdmin(admin.ModelAdmin):
-    list_display = ("name", "phone", "email", "route", "status", "notification_state", "payment", "created_at")
+    list_display = ("name", "phone", "email", "route", "departure", "status", "notification_state", "payment", "created_at")
     list_filter = ("status", "notification_sent_at", "route", "created_at")
     search_fields = ("name", "phone", "route")
     list_editable = ("status",)

@@ -42,6 +42,10 @@ def send_lead_notification(lead_id):
             f"Телефон: {lead.phone}\n"
             f"E-mail: {lead.email or 'не указан'}\n"
             f"Маршрут: {lead.route}\n"
+        )
+        if lead.departure_id:
+            body += f"Заезд: {lead.departure.start_date:%d.%m.%Y} — {lead.departure.end_date:%d.%m.%Y}\n"
+        body += (
             f"Дата: {created}\n"
             f"Источник: {'оплата ЮKassa' if lead.payment_id else 'форма сайта'}\n"
         )
@@ -180,9 +184,25 @@ def request_api(request):
     try:
         data = json.loads(request.body)
         name, phone, email, route = (str(data.get(k, "")).strip() for k in ("name", "phone", "email", "route"))
+        departure_id = data.get("departure_id")
+        departure = None
+        if departure_id:
+            try:
+                departure = RouteDeparture.objects.get(
+                    pk=int(departure_id),
+                    route__title=route,
+                    is_published=True,
+                    start_date__gte=timezone.localdate(),
+                )
+                if departure.status == "closed" or (
+                    departure.status in ("open", "few") and departure.available_places == 0
+                ):
+                    raise RouteDeparture.DoesNotExist
+            except (RouteDeparture.DoesNotExist, TypeError, ValueError):
+                return JsonResponse({"message": "Выбранный заезд больше недоступен. Выберите другую дату."}, status=400)
         if len(name) < 2 or not re.fullmatch(r"[+0-9 ()-]{7,}", phone) or not route:
             return JsonResponse({"message": "Проверьте имя и номер телефона."}, status=400)
-        lead = Lead.objects.create(name=name, phone=phone, email=email, route=route)
+        lead = Lead.objects.create(name=name, phone=phone, email=email, route=route, departure=departure)
         transaction.on_commit(lambda: queue_lead_notification(lead.pk))
         return JsonResponse({"ok": True, "message": "Заявка принята"}, status=201)
     except (ValueError, json.JSONDecodeError):

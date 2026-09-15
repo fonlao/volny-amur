@@ -42,6 +42,8 @@ class Command(BaseCommand):
         ]
         for title, offset, duration, capacity, booked, status, note in departure_specs:
             route = Route.objects.filter(title=title).first()
+            if not route and title == "По следам тигра":
+                route = Route.objects.filter(visual_style="forest").first()
             if route:
                 start_date = today + timedelta(days=offset)
                 RouteDeparture.objects.get_or_create(
