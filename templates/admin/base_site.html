@@ -1,0 +1,27 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} · {% endif %}{{ title }} · Вольный Амур{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'content/admin-brand.css' %}">
+{% endblock %}
+
+{% block branding %}
+<div class="brand-heading">
+  <a href="{% url 'admin:index' %}" aria-label="На главную административной панели">
+    <span class="brand-symbol" aria-hidden="true">⌁</span>
+    <span><strong>ВОЛЬНЫЙ АМУР</strong><small>ПАНЕЛЬ УПРАВЛЕНИЯ</small></span>
+  </a>
+</div>
+{% endblock %}
+
+{% block nav-global %}
+<div class="brand-quicklinks">
+  <a href="/" target="_blank" rel="noopener">Открыть сайт ↗</a>
+  {% if user.is_authenticated and user.is_staff %}
+  <a href="{% url 'admin:content_lead_changelist' %}">Заявки</a>
+  {% endif %}
+</div>
+{% endblock %}

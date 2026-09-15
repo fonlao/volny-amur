@@ -27,12 +27,13 @@ MIDDLEWARE = [
 ROOT_URLCONF = "amur_site.urls"
 TEMPLATES = [{
     "BACKEND": "django.template.backends.django.DjangoTemplates",
-    "DIRS": [],
+    "DIRS": [BASE_DIR / "templates"],
     "APP_DIRS": True,
     "OPTIONS": {"context_processors": [
         "django.template.context_processors.request",
         "django.contrib.auth.context_processors.auth",
         "django.contrib.messages.context_processors.messages",
+        "content.admin_context.dashboard_counts",
     ]},
 }]
 WSGI_APPLICATION = "amur_site.wsgi.application"

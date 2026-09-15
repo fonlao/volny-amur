@@ -1,0 +1,68 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block bodyclass %}{{ block.super }} brand-dashboard{% endblock %}
+{% block nav-breadcrumbs %}{% endblock %}
+{% block nav-sidebar %}{% endblock %}
+
+{% block content %}
+<div class="dashboard-hero">
+  <p class="dashboard-eyebrow">ОБЗОР САЙТА · ВОЛЬНЫЙ АМУР</p>
+  <h1>Здравствуйте, {{ user.get_short_name|default:user.username }}!</h1>
+  <p>Управляйте маршрутами, специалистами и заявками с одной страницы.</p>
+  <a class="dashboard-site-link" href="/" target="_blank" rel="noopener">Посмотреть сайт <span aria-hidden="true">↗</span></a>
+</div>
+
+<div class="dashboard-stats">
+  <a class="stat-card" href="{% url 'admin:content_lead_changelist' %}">
+    <span class="stat-label">Новые заявки</span>
+    <strong>{{ dashboard_stats.new_leads }}</strong>
+    <small>Требуют вашего внимания ↗</small>
+  </a>
+  <a class="stat-card" href="{% url 'admin:content_lead_changelist' %}">
+    <span class="stat-label">Все заявки</span>
+    <strong>{{ dashboard_stats.all_leads }}</strong>
+    <small>История обращений ↗</small>
+  </a>
+  <a class="stat-card" href="{% url 'admin:content_payment_changelist' %}">
+    <span class="stat-label">Ожидают оплаты</span>
+    <strong>{{ dashboard_stats.pending_payments }}</strong>
+    <small>Платежи ЮKassa ↗</small>
+  </a>
+  <a class="stat-card" href="{% url 'admin:content_route_changelist' %}">
+    <span class="stat-label">Активные маршруты</span>
+    <strong>{{ dashboard_stats.active_routes }}</strong>
+    <small>На сайте сейчас ↗</small>
+  </a>
+</div>
+
+<div class="dashboard-groups">
+  <section class="dashboard-group" aria-labelledby="content-group">
+    <div class="group-icon" aria-hidden="true">◇</div>
+    <h2 id="content-group">Содержимое сайта</h2>
+    <p>Меняйте предложения, маршруты и карточки команды.</p>
+    <div class="dashboard-links">
+      <a href="{% url 'admin:content_sitesettings_changelist' %}">Тексты и контакты <span>↗</span></a>
+      <a href="{% url 'admin:content_route_changelist' %}">Маршруты и карта <span>↗</span></a>
+      <a href="{% url 'admin:content_advantage_changelist' %}">Преимущества <span>↗</span></a>
+      <a href="{% url 'admin:content_guide_changelist' %}">Наши специалисты <span>↗</span></a>
+    </div>
+  </section>
+  <section class="dashboard-group" aria-labelledby="client-group">
+    <div class="group-icon" aria-hidden="true">⌖</div>
+    <h2 id="client-group">Клиенты и оплаты</h2>
+    <p>Просматривайте новые обращения и контролируйте платежи.</p>
+    <div class="dashboard-links">
+      <a href="{% url 'admin:content_lead_changelist' %}">Заявки и уведомления <span>↗</span></a>
+      <a href="{% url 'admin:content_payment_changelist' %}">Платежи ЮKassa <span>↗</span></a>
+    </div>
+  </section>
+</div>
+
+{% if app_list %}
+<details class="dashboard-system">
+  <summary>Дополнительные разделы администрирования</summary>
+  {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
+</details>
+{% endif %}
+{% endblock %}

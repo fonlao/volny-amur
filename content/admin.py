@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils.html import format_html
 from .models import SiteSettings, Advantage, Route, Guide, Lead, Payment
 
 @admin.register(SiteSettings)
@@ -47,10 +48,10 @@ class LeadAdmin(admin.ModelAdmin):
     @admin.display(description="Уведомление")
     def notification_state(self, obj):
         if obj.notification_sent_at:
-            return "Отправлено"
+            return format_html('<span class="status-pill status-success">{}</span>', "Отправлено")
         if obj.notification_error:
-            return "Ошибка"
-        return "Ожидает"
+            return format_html('<span class="status-pill status-error">{}</span>', "Ошибка")
+        return format_html('<span class="status-pill status-waiting">{}</span>', "Ожидает")
 
     @admin.action(description="Отправить уведомление повторно")
     def resend_notifications(self, request, queryset):
@@ -60,7 +61,7 @@ class LeadAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ("public_id", "name", "route", "amount", "status", "paid", "created_at")
+    list_display = ("public_id", "name", "route", "amount", "payment_state", "created_at")
     list_filter = ("status", "paid", "route", "created_at")
     search_fields = ("public_id", "yookassa_id", "name", "phone", "email", "route")
     readonly_fields = (
@@ -68,6 +69,18 @@ class PaymentAdmin(admin.ModelAdmin):
         "route", "amount", "status", "paid", "cancellation_reason", "customer_ip", "created_at", "updated_at",
     )
     actions = ("refresh_statuses",)
+
+    @admin.display(description="Состояние", ordering="status")
+    def payment_state(self, obj):
+        if obj.paid:
+            return format_html('<span class="status-pill status-success">{}</span>', "Оплачен")
+        if obj.status == "canceled":
+            return format_html('<span class="status-pill status-error">{}</span>', "Отменён")
+        if obj.status == "error":
+            return format_html('<span class="status-pill status-error">{}</span>', "Ошибка")
+        if obj.status == "pending":
+            return format_html('<span class="status-pill status-waiting">{}</span>', "Ожидает")
+        return format_html('<span class="status-pill status-neutral">{}</span>', obj.get_status_display())
 
     @admin.action(description="Обновить статус выбранных платежей из ЮKassa")
     def refresh_statuses(self, request, queryset):
