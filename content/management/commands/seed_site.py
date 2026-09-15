@@ -1,5 +1,7 @@
 from django.core.management.base import BaseCommand
-from content.models import SiteSettings, Advantage, Route, Guide
+from datetime import timedelta
+from django.utils import timezone
+from content.models import SiteSettings, Advantage, Route, RouteDeparture, Guide
 
 class Command(BaseCommand):
     help = "Создаёт начальное содержимое сайта"
@@ -31,4 +33,26 @@ class Command(BaseCommand):
         for order, row in enumerate(guides, 1):
             name, role, experience, quote, initials, color = row
             Guide.objects.get_or_create(name=name, defaults={"role": role, "experience": experience, "quote": quote, "initials": initials, "color": color, "order": order})
+        today = timezone.localdate()
+        departure_specs = [
+            ("Шантарские острова", 28, 8, 8, 3, "open", "Сбор группы в Комсомольске-на-Амуре"),
+            ("Амурские протоки", 12, 4, 8, 6, "few", "Подходит для первого знакомства с краем"),
+            ("Дуссе-Алинь", 48, 10, 8, 2, "open", "Требуется опыт многодневных походов"),
+            ("По следам тигра", 72, 5, 6, 6, "waitlist", "Можно оставить заявку в лист ожидания"),
+        ]
+        for title, offset, duration, capacity, booked, status, note in departure_specs:
+            route = Route.objects.filter(title=title).first()
+            if route:
+                start_date = today + timedelta(days=offset)
+                RouteDeparture.objects.get_or_create(
+                    route=route,
+                    start_date=start_date,
+                    defaults={
+                        "end_date": start_date + timedelta(days=duration - 1),
+                        "capacity": capacity,
+                        "booked_places": booked,
+                        "status": status,
+                        "note": note,
+                    },
+                )
         self.stdout.write(self.style.SUCCESS("Начальное содержимое создано"))

@@ -222,7 +222,7 @@ a:hover, a:focus { color: var(--brand-hover); }
 }
 .dashboard-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
   margin: 20px 0 32px;
 }
@@ -434,7 +434,7 @@ body.login #login-form input[type="text"],
 body.login #login-form input[type="password"] { width: 100%; }
 
 @media (max-width: 1050px) {
-  .dashboard-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .dashboard-groups { grid-template-columns: 1fr; }
 }
 @media (max-width: 767px) {

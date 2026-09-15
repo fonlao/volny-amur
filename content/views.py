@@ -15,7 +15,7 @@ from django.http import FileResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from .models import SiteSettings, Advantage, Route, Guide, Lead, Payment
+from .models import SiteSettings, Advantage, Route, RouteDeparture, Guide, Lead, Payment
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +151,28 @@ def content_api(request):
         )),
         "guides": list(Guide.objects.filter(is_active=True).values("name", "role", "experience", "quote", "initials", "color", "image_url")),
     }, json_dumps_params={"ensure_ascii": False})
+
+@require_http_methods(["GET"])
+def departures_api(request):
+    today = timezone.localdate()
+    departures = RouteDeparture.objects.filter(
+        is_published=True,
+        start_date__gte=today,
+    ).select_related("route")
+    data = []
+    for departure in departures:
+        data.append({
+            "id": departure.pk,
+            "route": departure.route.title,
+            "route_style": departure.route.visual_style,
+            "start_date": departure.start_date.isoformat(),
+            "end_date": departure.end_date.isoformat(),
+            "status": departure.status,
+            "available_places": departure.available_places,
+            "capacity": departure.capacity,
+            "note": departure.note,
+        })
+    return JsonResponse({"departures": data}, json_dumps_params={"ensure_ascii": False})
 
 @csrf_exempt
 @require_http_methods(["POST"])

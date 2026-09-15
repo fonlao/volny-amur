@@ -34,6 +34,11 @@
     <strong>{{ dashboard_stats.active_routes }}</strong>
     <small>На сайте сейчас ↗</small>
   </a>
+  <a class="stat-card" href="{% url 'admin:content_routedeparture_changelist' %}">
+    <span class="stat-label">Ближайшие заезды</span>
+    <strong>{{ dashboard_stats.upcoming_departures }}</strong>
+    <small>Календарь маршрутов ↗</small>
+  </a>
 </div>
 
 <div class="dashboard-groups">
@@ -44,6 +49,7 @@
     <div class="dashboard-links">
       <a href="{% url 'admin:content_sitesettings_changelist' %}">Тексты и контакты <span>↗</span></a>
       <a href="{% url 'admin:content_route_changelist' %}">Маршруты и карта <span>↗</span></a>
+      <a href="{% url 'admin:content_routedeparture_changelist' %}">Календарь заездов <span>↗</span></a>
       <a href="{% url 'admin:content_advantage_changelist' %}">Преимущества <span>↗</span></a>
       <a href="{% url 'admin:content_guide_changelist' %}">Наши специалисты <span>↗</span></a>
     </div>

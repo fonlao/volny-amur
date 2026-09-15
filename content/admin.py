@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import SiteSettings, Advantage, Route, Guide, Lead, Payment
+from .models import SiteSettings, Advantage, Route, RouteDeparture, Guide, Lead, Payment
 
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
@@ -31,6 +31,35 @@ class RouteAdmin(OrderedAdmin):
         ("Начало маршрута на карте", {"fields": ("start_location", "start_latitude", "start_longitude")}),
         ("Публикация", {"fields": ("order", "is_active")}),
     )
+
+@admin.register(RouteDeparture)
+class RouteDepartureAdmin(admin.ModelAdmin):
+    list_display = ("route", "start_date", "end_date", "availability", "status_badge", "is_published")
+    list_filter = ("status", "is_published", "start_date", "route")
+    search_fields = ("route__title", "note")
+    list_editable = ("is_published",)
+    date_hierarchy = "start_date"
+    readonly_fields = ("created_at", "updated_at")
+    fieldsets = (
+        ("Заезд", {"fields": ("route", "start_date", "end_date", "status", "is_published")}),
+        ("Места", {"fields": ("capacity", "booked_places", "note")}),
+        ("Служебная информация", {"fields": ("created_at", "updated_at")}),
+    )
+
+    @admin.display(description="Свободно")
+    def availability(self, obj):
+        return f"{obj.available_places} из {obj.capacity}"
+
+    @admin.display(description="Статус", ordering="status")
+    def status_badge(self, obj):
+        classes = {
+            "open": ("status-success", "Есть места"),
+            "few": ("status-waiting", "Мало мест"),
+            "waitlist": ("status-neutral", "Лист ожидания"),
+            "closed": ("status-error", "Закрыт"),
+        }
+        css_class, label = classes[obj.status]
+        return format_html('<span class="status-pill {}">{}</span>', css_class, label)
 
 @admin.register(Guide)
 class GuideAdmin(OrderedAdmin):

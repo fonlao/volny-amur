@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 import uuid
 
 class SiteSettings(models.Model):
@@ -59,6 +60,49 @@ class Route(OrderedActiveModel):
         verbose_name = "Маршрут"
         verbose_name_plural = "Маршруты"
     def __str__(self): return self.title
+
+
+class RouteDeparture(models.Model):
+    STATUS = [
+        ("open", "Есть места"),
+        ("few", "Осталось мало мест"),
+        ("waitlist", "Лист ожидания"),
+        ("closed", "Набор закрыт"),
+    ]
+    route = models.ForeignKey(Route, verbose_name="Маршрут", on_delete=models.CASCADE, related_name="departures")
+    start_date = models.DateField("Дата начала")
+    end_date = models.DateField("Дата окончания")
+    capacity = models.PositiveSmallIntegerField("Всего мест", default=8)
+    booked_places = models.PositiveSmallIntegerField("Занято мест", default=0)
+    status = models.CharField("Статус", max_length=12, choices=STATUS, default="open")
+    note = models.CharField("Примечание", max_length=160, blank=True)
+    is_published = models.BooleanField("Показывать на сайте", default=True)
+    created_at = models.DateTimeField("Создан", auto_now_add=True)
+    updated_at = models.DateTimeField("Обновлён", auto_now=True)
+
+    class Meta:
+        ordering = ("start_date", "route__order", "route__title")
+        verbose_name = "Заезд"
+        verbose_name_plural = "Календарь заездов"
+        constraints = [
+            models.UniqueConstraint(fields=("route", "start_date"), name="unique_route_departure_date"),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.end_date and self.start_date and self.end_date < self.start_date:
+            errors["end_date"] = "Дата окончания не может быть раньше даты начала."
+        if self.booked_places > self.capacity:
+            errors["booked_places"] = "Число занятых мест не может превышать вместимость."
+        if errors:
+            raise ValidationError(errors)
+
+    @property
+    def available_places(self):
+        return max(self.capacity - self.booked_places, 0)
+
+    def __str__(self):
+        return f"{self.route.title} — {self.start_date:%d.%m.%Y}"
 
 class Guide(OrderedActiveModel):
     name = models.CharField("Имя", max_length=100)
