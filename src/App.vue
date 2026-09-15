@@ -7,12 +7,15 @@ const activeMapRoute = ref(0)
 const activeFaq = ref(0)
 const mapElement = ref(null)
 const mapMessage = ref('')
+const departures = ref([])
+const activeCalendarMonth = ref('all')
+const departuresLoading = ref(true)
 const theme = ref('light')
 const sending = ref(false)
 const status = ref('')
 const paymentLoading = ref(false)
 const paymentStatus = ref('')
-const form = ref({ name: '', phone: '', email: '', route: 'Шантарские острова' })
+const form = ref({ name: '', phone: '', email: '', route: 'Шантарские острова', departure_id: '', departure_label: '' })
 const site = ref({
   hero_eyebrow: 'Хабаровский край · Дальний Восток', hero_title: 'Там, где начинается настоящее',
   hero_text: 'Авторские путешествия в места, где тайга встречается с океаном, а каждый день становится историей.',
@@ -131,6 +134,48 @@ function openRouteFromMap(index) {
   scrollTo('routes')
 }
 
+const monthFormatter = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' })
+const dateFormatter = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' })
+
+function departureMonthKey(departure) {
+  return departure.start_date.slice(0, 7)
+}
+
+function calendarMonths() {
+  const unique = [...new Set(departures.value.map(departureMonthKey))]
+  return unique.map(value => ({
+    value,
+    label: monthFormatter.format(new Date(`${value}-01T12:00:00`))
+  }))
+}
+
+function visibleDepartures() {
+  return activeCalendarMonth.value === 'all'
+    ? departures.value
+    : departures.value.filter(item => departureMonthKey(item) === activeCalendarMonth.value)
+}
+
+function departureStatus(departure) {
+  if (departure.status === 'closed') return { label: 'Набор закрыт', className: 'closed' }
+  if (departure.status === 'waitlist') return { label: 'Лист ожидания', className: 'waitlist' }
+  if (departure.status === 'few' || departure.available_places <= 2) return { label: `Осталось ${departure.available_places}`, className: 'few' }
+  return { label: `${departure.available_places} мест`, className: 'open' }
+}
+
+function formatDepartureRange(departure) {
+  const start = new Date(`${departure.start_date}T12:00:00`)
+  const end = new Date(`${departure.end_date}T12:00:00`)
+  return `${dateFormatter.format(start)} — ${dateFormatter.format(end)}`
+}
+
+function selectDeparture(departure) {
+  if (departure.status === 'closed') return
+  form.value.route = departure.route
+  form.value.departure_id = departure.id
+  form.value.departure_label = formatDepartureRange(departure)
+  scrollTo('request')
+}
+
 function splitTitle(text) {
   const words = (text || '').trim().split(/\s+/)
   const cut = Math.max(1, words.length - 2)
@@ -157,9 +202,12 @@ initTheme()
 
 onMounted(async () => {
   try {
-    const response = await fetch('/api/content')
-    if (!response.ok) return
-    const data = await response.json()
+    const [contentResponse, departuresResponse] = await Promise.all([
+      fetch('/api/content'),
+      fetch('/api/departures')
+    ])
+    if (!contentResponse.ok) return
+    const data = await contentResponse.json()
     site.value = data.site
     if (data.advantages?.length) advantages.value = data.advantages
     if (data.routes?.length) {
@@ -167,9 +215,14 @@ onMounted(async () => {
       form.value.route = routes.value[0].title
     }
     if (data.guides?.length) guides.value = data.guides.map(item => ({ ...item, exp: item.experience }))
+    if (departuresResponse.ok) {
+      const departuresData = await departuresResponse.json()
+      departures.value = departuresData.departures || []
+    }
   } catch (_) {
     // Встроенное содержимое остаётся доступным, если API временно недоступен.
   } finally {
+    departuresLoading.value = false
     await nextTick()
     initRouteMap()
   }
@@ -250,7 +303,7 @@ onMounted(checkPayment)
     <header class="header">
       <a class="logo" href="#top" aria-label="Вольный Амур — главная"><span class="logo-mark">⌁</span><span>ВОЛЬНЫЙ<br><b>АМУР</b></span></a>
       <nav :class="['nav', { open: menuOpen }]">
-        <button @click="scrollTo('advantages')">О нас</button><button @click="scrollTo('routes')">Маршруты</button><button @click="scrollTo('route-map')">Карта</button><button @click="scrollTo('guides')">Наши специалисты</button>
+        <button @click="scrollTo('advantages')">О нас</button><button @click="scrollTo('routes')">Маршруты</button><button @click="scrollTo('route-map')">Карта</button><button @click="scrollTo('calendar')">Календарь</button><button @click="scrollTo('guides')">Наши специалисты</button>
       </nav>
       <button class="header-cta" @click="scrollTo('request')">Подобрать маршрут <span>↗</span></button>
       <button class="theme-toggle" type="button" :aria-label="theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'" :title="theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'" @click="toggleTheme"><span>{{ theme === 'dark' ? '☀' : '☾' }}</span></button>
@@ -325,8 +378,33 @@ onMounted(checkPayment)
         <p class="map-caption">Карта предоставлена сервисом Яндекс.Карты. Точная точка встречи подтверждается специалистом перед поездкой.</p>
       </section>
 
+      <section id="calendar" class="calendar section-pad">
+        <div class="section-kicker">05 / КАЛЕНДАРЬ ЗАЕЗДОВ</div>
+        <div class="calendar-heading">
+          <h2>Выберите дату<br><em>будущего маршрута</em></h2>
+          <p>Показываем актуальное количество свободных мест. Выберите удобный заезд — дата и маршрут автоматически появятся в заявке.</p>
+        </div>
+        <div v-if="calendarMonths().length" class="calendar-months" aria-label="Фильтр заездов по месяцам">
+          <button :class="{ active: activeCalendarMonth === 'all' }" @click="activeCalendarMonth = 'all'">Все даты</button>
+          <button v-for="month in calendarMonths()" :key="month.value" :class="{ active: activeCalendarMonth === month.value }" @click="activeCalendarMonth = month.value">{{ month.label }}</button>
+        </div>
+        <div v-if="departuresLoading" class="calendar-empty">Загружаем ближайшие даты…</div>
+        <div v-else-if="visibleDepartures().length" class="departure-grid">
+          <article v-for="departure in visibleDepartures()" :key="departure.id" :class="['departure-card', departureStatus(departure).className]">
+            <div class="departure-top"><span>{{ departure.route_style }}</span><b :class="departureStatus(departure).className">{{ departureStatus(departure).label }}</b></div>
+            <time :datetime="departure.start_date">{{ formatDepartureRange(departure) }}</time>
+            <h3>{{ departure.route }}</h3>
+            <p>{{ departure.note || 'Подробности программы уточнит наш специалист.' }}</p>
+            <div class="departure-capacity"><span>Свободно</span><strong>{{ departure.available_places }} / {{ departure.capacity }}</strong><i><em :style="{ width: `${Math.max(0, Math.min(100, departure.available_places / departure.capacity * 100))}%` }"></em></i></div>
+            <button :disabled="departure.status === 'closed'" @click="selectDeparture(departure)">{{ departure.status === 'waitlist' ? 'Встать в лист ожидания' : departure.status === 'closed' ? 'Набор закрыт' : 'Выбрать заезд' }} <span>↗</span></button>
+          </article>
+        </div>
+        <div v-else class="calendar-empty">На выбранный месяц опубликованных заездов пока нет.</div>
+        <div class="calendar-legend"><span><i class="open"></i> Есть места</span><span><i class="few"></i> Мало мест</span><span><i class="waitlist"></i> Лист ожидания</span></div>
+      </section>
+
       <section id="guides" class="guides section-pad">
-        <div class="section-kicker">05 / НАШИ СПЕЦИАЛИСТЫ</div>
+        <div class="section-kicker">06 / НАШИ СПЕЦИАЛИСТЫ</div>
         <div class="section-heading"><h2>{{ splitTitle(site.guides_title).lead }}<br><em>{{ splitTitle(site.guides_title).accent }}</em></h2><p>Наши гиды не просто показывают дорогу. Они помогают почувствовать место.</p></div>
         <div class="guide-grid">
           <article v-for="guide in guides" :key="guide.name">
@@ -337,7 +415,7 @@ onMounted(checkPayment)
       </section>
 
       <section id="faq" class="faq section-pad">
-        <div class="section-kicker">06 / ВАЖНО ЗНАТЬ</div>
+        <div class="section-kicker">07 / ВАЖНО ЗНАТЬ</div>
         <div class="faq-layout">
           <div class="faq-intro">
             <h2>Ответы на<br><em>частые вопросы</em></h2>
@@ -358,12 +436,13 @@ onMounted(checkPayment)
       </section>
 
       <section id="request" class="request section-pad">
-        <div class="request-copy"><div class="section-kicker light">07 / НАЧНЁМ?</div><h2>{{ splitTitle(site.request_title).lead }}<br><em>{{ splitTitle(site.request_title).accent }}</em></h2><p>{{ site.request_text }}</p><div class="contact-line"><span>или напишите нам</span><a :href="`mailto:${site.email}`">{{ site.email }}</a><a :href="`tel:${site.phone.replace(/[^+\d]/g, '')}`">{{ site.phone }}</a></div></div>
+        <div class="request-copy"><div class="section-kicker light">08 / НАЧНЁМ?</div><h2>{{ splitTitle(site.request_title).lead }}<br><em>{{ splitTitle(site.request_title).accent }}</em></h2><p>{{ site.request_text }}</p><div class="contact-line"><span>или напишите нам</span><a :href="`mailto:${site.email}`">{{ site.email }}</a><a :href="`tel:${site.phone.replace(/[^+\d]/g, '')}`">{{ site.phone }}</a></div></div>
         <form class="request-form" @submit.prevent="submitForm">
           <label>Как вас зовут?<input v-model.trim="form.name" required minlength="2" placeholder="Ваше имя"></label>
           <label>Телефон<input v-model.trim="form.phone" required pattern="[+0-9 ()-]{7,}" placeholder="+7 999 000-00-00"></label>
           <label>E-mail<input v-model.trim="form.email" required type="email" placeholder="name@example.ru"></label>
           <label>Какой маршрут интересен?<select v-model="form.route"><option v-for="route in routes" :key="route.title">{{ route.title }}</option></select></label>
+          <div v-if="form.departure_label" class="selected-departure"><span>Выбранный заезд</span><strong>{{ form.departure_label }}</strong><button type="button" @click="form.departure_id = ''; form.departure_label = ''">Изменить</button></div>
           <button class="submit" :disabled="sending">{{ sending ? 'Отправляем…' : 'Отправить заявку' }} <span>↗</span></button>
           <button type="button" class="payment-button" :disabled="paymentLoading" @click="startPayment">
             <span>{{ paymentLoading ? 'Создаём платёж…' : `Оплатить предоплату — ${Number(site.booking_deposit || 5000).toLocaleString('ru-RU')} ₽` }}</span>
