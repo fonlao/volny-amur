@@ -8,6 +8,7 @@ const activeRoute = ref(0)
 const activeMapRoute = ref(0)
 const activeFaq = ref(0)
 const mapElement = ref(null)
+const theme = ref('light')
 const sending = ref(false)
 const status = ref('')
 const paymentLoading = ref(false)
@@ -125,6 +126,24 @@ function splitTitle(text) {
   return { lead: words.slice(0, cut).join(' '), accent: words.slice(cut).join(' ') }
 }
 
+function applyTheme(nextTheme) {
+  theme.value = nextTheme
+  localStorage.setItem('volny-amur-theme', nextTheme)
+  document.documentElement.dataset.theme = nextTheme
+}
+
+function toggleTheme() {
+  applyTheme(theme.value === 'dark' ? 'light' : 'dark')
+}
+
+function initTheme() {
+  const saved = localStorage.getItem('volny-amur-theme')
+  const preferred = window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  applyTheme(saved === 'dark' || saved === 'light' ? saved : preferred)
+}
+
+initTheme()
+
 onMounted(async () => {
   try {
     const response = await fetch('/api/content')
@@ -223,6 +242,7 @@ onMounted(checkPayment)
         <button @click="scrollTo('advantages')">О нас</button><button @click="scrollTo('routes')">Маршруты</button><button @click="scrollTo('route-map')">Карта</button><button @click="scrollTo('guides')">Наши специалисты</button>
       </nav>
       <button class="header-cta" @click="scrollTo('request')">Подобрать маршрут <span>↗</span></button>
+      <button class="theme-toggle" type="button" :aria-label="theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'" :title="theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'" @click="toggleTheme"><span>{{ theme === 'dark' ? '☀' : '☾' }}</span></button>
       <button class="menu" @click="menuOpen = !menuOpen" aria-label="Меню">{{ menuOpen ? '×' : '☰' }}</button>
     </header>
 
