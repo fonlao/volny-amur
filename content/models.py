@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.contrib.auth.models import User
 import uuid
 
 class SiteSettings(models.Model):
@@ -123,6 +124,20 @@ class Visit(models.Model):
     def __str__(self):
         return f"{self.day} — {self.path}"
 
+
+class CustomerProfile(models.Model):
+    user = models.OneToOneField(User, verbose_name="Пользователь", on_delete=models.CASCADE, related_name="customer_profile")
+    phone = models.CharField("Телефон", max_length=40, blank=True)
+    created_at = models.DateTimeField("Дата регистрации", auto_now_add=True)
+    updated_at = models.DateTimeField("Обновлён", auto_now=True)
+
+    class Meta:
+        verbose_name = "Профиль клиента"
+        verbose_name_plural = "Профили клиентов"
+
+    def __str__(self):
+        return self.user.get_full_name() or self.user.email or self.user.username
+
 class Guide(OrderedActiveModel):
     name = models.CharField("Имя", max_length=100)
     role = models.CharField("Специализация", max_length=100)
@@ -145,6 +160,7 @@ class Lead(models.Model):
     status = models.CharField("Статус", max_length=20, choices=STATUS, default="new")
     notes = models.TextField("Заметки менеджера", blank=True)
     payment = models.OneToOneField("Payment", verbose_name="Платёж", on_delete=models.SET_NULL, null=True, blank=True)
+    user = models.ForeignKey(User, verbose_name="Клиент", on_delete=models.SET_NULL, null=True, blank=True, related_name="travel_leads")
     departure = models.ForeignKey("RouteDeparture", verbose_name="Выбранный заезд", on_delete=models.SET_NULL, null=True, blank=True, related_name="leads")
     notification_sent_at = models.DateTimeField("Уведомление отправлено", null=True, blank=True)
     notification_attempted_at = models.DateTimeField("Последняя попытка отправки", null=True, blank=True)
@@ -165,6 +181,7 @@ class Payment(models.Model):
         ("error", "Ошибка"),
     ]
     public_id = models.UUIDField("Номер бронирования", default=uuid.uuid4, unique=True, editable=False)
+    user = models.ForeignKey(User, verbose_name="Клиент", on_delete=models.SET_NULL, null=True, blank=True, related_name="travel_payments")
     yookassa_id = models.CharField("ID платежа ЮKassa", max_length=64, blank=True, unique=True, null=True)
     idempotence_key = models.UUIDField("Ключ идемпотентности", default=uuid.uuid4, unique=True, editable=False)
     name = models.CharField("Имя", max_length=100)

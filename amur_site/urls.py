@@ -11,6 +11,11 @@ admin.site.index_title = "Содержание и заявки"
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/content", views.content_api),
+    path("api/auth/csrf", views.auth_csrf_api),
+    path("api/auth/me", views.auth_me_api),
+    path("api/auth/register", views.auth_register_api),
+    path("api/auth/login", views.auth_login_api),
+    path("api/auth/logout", views.auth_logout_api),
     path("api/departures", views.departures_api),
     path("api/requests", views.request_api),
     path("api/payments/create", views.payment_create_api),

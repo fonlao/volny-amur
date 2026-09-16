@@ -11,13 +11,117 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.db import close_old_connections, transaction
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
 from django.http import FileResponse, JsonResponse
 from django.utils import timezone
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from .models import SiteSettings, Advantage, Route, RouteDeparture, Guide, Lead, Payment
 
 logger = logging.getLogger(__name__)
+
+def serialize_user(user):
+    profile = getattr(user, "customer_profile", None)
+    return {
+        "id": user.pk,
+        "email": user.email,
+        "name": user.get_full_name() or user.username,
+        "phone": profile.phone if profile else "",
+    }
+
+@ensure_csrf_cookie
+@require_http_methods(["GET"])
+def auth_csrf_api(request):
+    return JsonResponse({"ok": True})
+
+@require_http_methods(["GET"])
+def auth_me_api(request):
+    if not request.user.is_authenticated or request.user.is_staff:
+        return JsonResponse({"authenticated": False})
+    leads = Lead.objects.filter(user=request.user).select_related("departure")
+    payments = Payment.objects.filter(user=request.user)
+    return JsonResponse({
+        "authenticated": True,
+        "user": serialize_user(request.user),
+        "leads": [
+            {
+                "id": lead.pk,
+                "route": lead.route,
+                "status": lead.get_status_display(),
+                "departure": (
+                    f"{lead.departure.start_date:%d.%m.%Y} — {lead.departure.end_date:%d.%m.%Y}"
+                    if lead.departure_id else "Дата уточняется"
+                ),
+                "created_at": timezone.localtime(lead.created_at).strftime("%d.%m.%Y"),
+            }
+            for lead in leads
+        ],
+        "payments": [
+            {
+                "id": str(payment.public_id),
+                "route": payment.route,
+                "amount": f"{payment.amount:.2f}",
+                "status": payment.get_status_display(),
+                "paid": payment.paid,
+                "created_at": timezone.localtime(payment.created_at).strftime("%d.%m.%Y"),
+            }
+            for payment in payments
+        ],
+    }, json_dumps_params={"ensure_ascii": False})
+
+@require_http_methods(["POST"])
+def auth_register_api(request):
+    try:
+        data = json.loads(request.body)
+        name = str(data.get("name", "")).strip()
+        email = str(data.get("email", "")).strip().lower()
+        phone = str(data.get("phone", "")).strip()
+        password = str(data.get("password", ""))
+        if len(name) < 2 or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+            return JsonResponse({"message": "Введите имя и корректный e-mail."}, status=400)
+        if phone and not re.fullmatch(r"[+0-9 ()-]{7,}", phone):
+            return JsonResponse({"message": "Проверьте номер телефона."}, status=400)
+        if User.objects.filter(email__iexact=email).exists():
+            return JsonResponse({"message": "Пользователь с таким e-mail уже зарегистрирован."}, status=409)
+        candidate = User(username=email, email=email, first_name=name)
+        validate_password(password, candidate)
+        candidate.set_password(password)
+        candidate.save()
+        from .models import CustomerProfile
+        CustomerProfile.objects.create(user=candidate, phone=phone)
+        Lead.objects.filter(user__isnull=True, email__iexact=email).update(user=candidate)
+        Payment.objects.filter(user__isnull=True, email__iexact=email).update(user=candidate)
+        login(request, candidate)
+        return JsonResponse({"authenticated": True, "user": serialize_user(candidate)}, status=201)
+    except (ValueError, json.JSONDecodeError):
+        return JsonResponse({"message": "Некорректные данные."}, status=400)
+    except Exception as error:
+        from django.core.exceptions import ValidationError
+        if isinstance(error, ValidationError):
+            return JsonResponse({"message": " ".join(error.messages)}, status=400)
+        raise
+
+@require_http_methods(["POST"])
+def auth_login_api(request):
+    try:
+        data = json.loads(request.body)
+        email = str(data.get("email", "")).strip().lower()
+        password = str(data.get("password", ""))
+        user = authenticate(request, username=email, password=password)
+        if user is None or user.is_staff:
+            return JsonResponse({"message": "Неверный e-mail или пароль."}, status=401)
+        login(request, user)
+        return JsonResponse({"authenticated": True, "user": serialize_user(user)})
+    except (ValueError, json.JSONDecodeError):
+        return JsonResponse({"message": "Некорректные данные."}, status=400)
+
+@require_http_methods(["POST"])
+def auth_logout_api(request):
+    logout(request)
+    return JsonResponse({"authenticated": False})
 
 def send_lead_notification(lead_id):
     close_old_connections()
@@ -202,7 +306,7 @@ def request_api(request):
                 return JsonResponse({"message": "Выбранный заезд больше недоступен. Выберите другую дату."}, status=400)
         if len(name) < 2 or not re.fullmatch(r"[+0-9 ()-]{7,}", phone) or not route:
             return JsonResponse({"message": "Проверьте имя и номер телефона."}, status=400)
-        lead = Lead.objects.create(name=name, phone=phone, email=email, route=route, departure=departure)
+        lead = Lead.objects.create(name=name, phone=phone, email=email, route=route, departure=departure, user=request.user if request.user.is_authenticated and not request.user.is_staff else None)
         transaction.on_commit(lambda: queue_lead_notification(lead.pk))
         return JsonResponse({"ok": True, "message": "Заявка принята"}, status=201)
     except (ValueError, json.JSONDecodeError):
@@ -241,6 +345,7 @@ def payment_create_api(request):
             )
 
         payment = Payment.objects.create(
+            user=request.user if request.user.is_authenticated and not request.user.is_staff else None,
             name=name,
             phone=phone,
             email=email,

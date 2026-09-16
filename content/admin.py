@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import SiteSettings, Advantage, Route, RouteDeparture, Guide, Lead, Payment, Visit
+from .models import SiteSettings, Advantage, Route, RouteDeparture, Guide, Lead, Payment, Visit, CustomerProfile
 
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
@@ -67,7 +67,7 @@ class GuideAdmin(OrderedAdmin):
 
 @admin.register(Lead)
 class LeadAdmin(admin.ModelAdmin):
-    list_display = ("name", "phone", "email", "route", "departure", "status", "notification_state", "payment", "created_at")
+    list_display = ("name", "phone", "email", "user", "route", "departure", "status", "notification_state", "payment", "created_at")
     list_filter = ("status", "notification_sent_at", "route", "created_at")
     search_fields = ("name", "phone", "route")
     list_editable = ("status",)
@@ -94,7 +94,7 @@ class PaymentAdmin(admin.ModelAdmin):
     list_filter = ("status", "paid", "route", "created_at")
     search_fields = ("public_id", "yookassa_id", "name", "phone", "email", "route")
     readonly_fields = (
-        "public_id", "yookassa_id", "idempotence_key", "name", "phone", "email",
+        "public_id", "yookassa_id", "idempotence_key", "user", "name", "phone", "email",
         "route", "amount", "status", "paid", "cancellation_reason", "customer_ip", "created_at", "updated_at",
     )
     actions = ("refresh_statuses",)
@@ -141,3 +141,9 @@ class VisitAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+@admin.register(CustomerProfile)
+class CustomerProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "phone", "created_at")
+    search_fields = ("user__email", "user__first_name", "user__last_name", "phone")
+    readonly_fields = ("created_at", "updated_at")
