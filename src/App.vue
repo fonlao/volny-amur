@@ -22,6 +22,9 @@ const sending = ref(false)
 const status = ref('')
 const paymentLoading = ref(false)
 const paymentStatus = ref('')
+const newsletter = ref({ email: '', consent: false })
+const newsletterSending = ref(false)
+const newsletterStatus = ref('')
 const form = ref({ name: '', phone: '', email: '', route: 'Шантарские острова', departure_id: '', departure_label: '' })
 const site = ref({
   hero_eyebrow: 'Хабаровский край · Дальний Восток', hero_title: 'Там, где начинается настоящее',
@@ -371,6 +374,31 @@ async function submitForm() {
   }
 }
 
+async function subscribeNewsletter() {
+  newsletterStatus.value = ''
+  if (!newsletter.value.consent) {
+    newsletterStatus.value = 'Подтвердите согласие на получение рекламной рассылки.'
+    return
+  }
+  newsletterSending.value = true
+  try {
+    const response = await fetch('/api/newsletter/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newsletter.value)
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.message || 'Не удалось оформить подписку')
+    newsletterStatus.value = data.message || 'Готово! Вы подписаны на новости «Вольного Амура».'
+    newsletter.value.email = ''
+    newsletter.value.consent = false
+  } catch (error) {
+    newsletterStatus.value = error.message
+  } finally {
+    newsletterSending.value = false
+  }
+}
+
 async function startPayment(event) {
   if (!event.currentTarget.form.reportValidity()) return
   paymentStatus.value = ''
@@ -416,7 +444,7 @@ onMounted(loadAccount)
     <header class="header">
       <a class="logo" href="#top" aria-label="Вольный Амур — главная"><span class="logo-mark">⌁</span><span>ВОЛЬНЫЙ<br><b>АМУР</b></span></a>
       <nav :class="['nav', { open: menuOpen }]">
-        <button @click="scrollTo('advantages')">О нас</button><button @click="scrollTo('routes')">Маршруты</button><button @click="scrollTo('guides')">Наши специалисты</button><button @click="scrollTo('reviews')">Отзывы</button>
+        <button @click="scrollTo('advantages')">О нас</button><button @click="scrollTo('routes')">Маршруты</button><button @click="scrollTo('guides')">Наши специалисты</button><button @click="scrollTo('reviews')">Отзывы</button><button @click="scrollTo('newsletter')">Новости</button>
       </nav>
       <button class="header-cta" @click="scrollTo('request')">Подобрать маршрут <span>↗</span></button>
       <button class="account-button" type="button" @click="openAccount()"><span>◎</span>{{ account.authenticated ? account.user.name : 'Личный кабинет' }}</button>
@@ -562,8 +590,18 @@ onMounted(loadAccount)
         </div>
       </section>
 
+      <section id="newsletter" class="newsletter section-pad">
+        <div class="newsletter-copy"><div class="section-kicker light">09 / НОВОСТИ И МАРШРУТЫ</div><h2>Дальний Восток<br><em>в вашей почте</em></h2><p>Новые маршруты, свободные даты и истории из экспедиций. Пишем редко и только по делу.</p></div>
+        <form class="newsletter-form" @submit.prevent="subscribeNewsletter">
+          <label class="newsletter-email">Ваш e-mail<input v-model.trim="newsletter.email" type="email" autocomplete="email" required placeholder="name@example.ru"></label>
+          <label class="newsletter-consent"><input v-model="newsletter.consent" type="checkbox" required><span>Я согласен(на) получать новости и рекламные предложения «Вольного Амура» по электронной почте. Отписаться можно в любой момент.</span></label>
+          <button type="submit" :disabled="newsletterSending">{{ newsletterSending ? 'Подписываем…' : 'Подписаться на новости' }} <span>↗</span></button>
+          <p v-if="newsletterStatus" class="newsletter-status" role="status">{{ newsletterStatus }}</p>
+        </form>
+      </section>
+
       <section id="request" class="request section-pad">
-        <div class="request-copy"><div class="section-kicker light">09 / НАЧНЁМ?</div><h2>{{ splitTitle(site.request_title).lead }}<br><em>{{ splitTitle(site.request_title).accent }}</em></h2><p>{{ site.request_text }}</p><div class="contact-line"><span>или напишите нам</span><a :href="`mailto:${site.email}`">{{ site.email }}</a><a :href="`tel:${site.phone.replace(/[^+\d]/g, '')}`">{{ site.phone }}</a></div></div>
+        <div class="request-copy"><div class="section-kicker light">10 / НАЧНЁМ?</div><h2>{{ splitTitle(site.request_title).lead }}<br><em>{{ splitTitle(site.request_title).accent }}</em></h2><p>{{ site.request_text }}</p><div class="contact-line"><span>или напишите нам</span><a :href="`mailto:${site.email}`">{{ site.email }}</a><a :href="`tel:${site.phone.replace(/[^+\d]/g, '')}`">{{ site.phone }}</a></div></div>
         <form class="request-form" @submit.prevent="submitForm">
           <label>Как вас зовут?<input v-model.trim="form.name" required minlength="2" placeholder="Ваше имя"></label>
           <label>Телефон<input v-model.trim="form.phone" required pattern="[+0-9 ()-]{7,}" placeholder="+7 999 000-00-00"></label>
@@ -628,6 +666,6 @@ onMounted(loadAccount)
       <span>Обсудить маршрут</span><i>↗</i>
     </button>
 
-    <footer><a class="logo inverted" href="#top"><span class="logo-mark">⌁</span><span>ВОЛЬНЫЙ<br><b>АМУР</b></span></a><p>Путешествия по Хабаровскому краю<br>с 2014 года</p><div><a href="#routes">Маршруты</a><a href="#guides">Наши специалисты</a><a href="#reviews">Отзывы</a><a href="#advantages">О нас</a></div><small>© 2026 Вольный Амур</small></footer>
+    <footer><a class="logo inverted" href="#top"><span class="logo-mark">⌁</span><span>ВОЛЬНЫЙ<br><b>АМУР</b></span></a><p>Путешествия по Хабаровскому краю<br>с 2014 года</p><div><a href="#routes">Маршруты</a><a href="#guides">Наши специалисты</a><a href="#reviews">Отзывы</a><a href="#newsletter">Новости</a><a href="#advantages">О нас</a></div><small>© 2026 Вольный Амур</small></footer>
   </div>
 </template>
