@@ -203,3 +203,49 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"{self.public_id} — {self.amount} ₽"
+
+
+class NewsletterSubscriber(models.Model):
+    email = models.EmailField("E-mail", unique=True)
+    consent = models.BooleanField("Согласие на рекламную рассылку", default=False)
+    is_active = models.BooleanField("Подписка активна", default=True)
+    consent_text = models.TextField("Текст согласия")
+    consent_ip = models.GenericIPAddressField("IP при подписке", null=True, blank=True)
+    consent_user_agent = models.CharField("Браузер при подписке", max_length=500, blank=True)
+    consent_at = models.DateTimeField("Согласие получено", auto_now_add=True)
+    unsubscribed_at = models.DateTimeField("Дата отписки", null=True, blank=True)
+    unsubscribe_token = models.UUIDField("Токен отписки", default=uuid.uuid4, unique=True, editable=False)
+
+    class Meta:
+        ordering = ("-consent_at",)
+        verbose_name = "Подписчик"
+        verbose_name_plural = "Подписчики рассылки"
+
+    def __str__(self):
+        return self.email
+
+
+class NewsletterCampaign(models.Model):
+    STATUS = [
+        ("draft", "Черновик"),
+        ("sending", "Отправляется"),
+        ("sent", "Отправлена"),
+        ("partial", "Отправлена частично"),
+        ("error", "Ошибка"),
+    ]
+    subject = models.CharField("Тема письма", max_length=200)
+    body = models.TextField("Текст письма")
+    status = models.CharField("Статус", max_length=20, choices=STATUS, default="draft")
+    sent_count = models.PositiveSmallIntegerField("Успешно отправлено", default=0)
+    failed_count = models.PositiveSmallIntegerField("Ошибок", default=0)
+    last_error = models.TextField("Последняя ошибка", blank=True)
+    created_at = models.DateTimeField("Создана", auto_now_add=True)
+    sent_at = models.DateTimeField("Отправлена", null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Рассылка"
+        verbose_name_plural = "Новостные рассылки"
+
+    def __str__(self):
+        return self.subject

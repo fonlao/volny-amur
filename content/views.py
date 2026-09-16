@@ -14,12 +14,14 @@ from django.db import close_old_connections, transaction
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from django.http import FileResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from .models import SiteSettings, Advantage, Route, RouteDeparture, Guide, Lead, Payment
+from .models import SiteSettings, Advantage, Route, RouteDeparture, Guide, Lead, Payment, NewsletterSubscriber
 
 logger = logging.getLogger(__name__)
 
@@ -311,6 +313,78 @@ def request_api(request):
         return JsonResponse({"ok": True, "message": "Заявка принята"}, status=201)
     except (ValueError, json.JSONDecodeError):
         return JsonResponse({"message": "Некорректные данные."}, status=400)
+
+
+NEWSLETTER_CONSENT_TEXT = (
+    "Я согласен(на) получать новости и рекламные предложения «Вольного Амура» "
+    "по электронной почте. Отписаться можно в любой момент."
+)
+
+
+def client_ip(request):
+    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    return (forwarded.split(",")[0].strip() if forwarded else request.META.get("REMOTE_ADDR")) or None
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def newsletter_subscribe_api(request):
+    try:
+        data = json.loads(request.body)
+        email = str(data.get("email", "")).strip().lower()
+        consent = data.get("consent") is True
+        validate_email(email)
+        if not consent:
+            return JsonResponse({"message": "Необходимо согласие на получение рекламной рассылки."}, status=400)
+
+        subscriber, created = NewsletterSubscriber.objects.get_or_create(
+            email=email,
+            defaults={
+                "consent": True,
+                "is_active": True,
+                "consent_text": NEWSLETTER_CONSENT_TEXT,
+                "consent_ip": client_ip(request),
+                "consent_user_agent": request.META.get("HTTP_USER_AGENT", "")[:500],
+            },
+        )
+        if not created:
+            subscriber.consent = True
+            subscriber.is_active = True
+            subscriber.consent_text = NEWSLETTER_CONSENT_TEXT
+            subscriber.consent_ip = client_ip(request)
+            subscriber.consent_user_agent = request.META.get("HTTP_USER_AGENT", "")[:500]
+            subscriber.consent_at = timezone.now()
+            subscriber.unsubscribed_at = None
+            subscriber.save(update_fields=(
+                "consent", "is_active", "consent_text", "consent_ip",
+                "consent_user_agent", "consent_at", "unsubscribed_at",
+            ))
+        return JsonResponse({
+            "ok": True,
+            "message": "Готово! Вы подписаны на новости «Вольного Амура».",
+        }, status=201 if created else 200)
+    except ValidationError:
+        return JsonResponse({"message": "Введите корректный адрес электронной почты."}, status=400)
+    except (ValueError, json.JSONDecodeError):
+        return JsonResponse({"message": "Некорректные данные."}, status=400)
+
+
+@require_http_methods(["GET"])
+def newsletter_unsubscribe_api(request, token):
+    subscriber = NewsletterSubscriber.objects.filter(unsubscribe_token=token).first()
+    if subscriber:
+        subscriber.is_active = False
+        subscriber.unsubscribed_at = timezone.now()
+        subscriber.save(update_fields=("is_active", "unsubscribed_at"))
+    return HttpResponse(
+        "<!doctype html><html lang='ru'><meta charset='utf-8'>"
+        "<title>Подписка отключена</title>"
+        "<body style='font-family:Arial;padding:48px;background:#f4faf7;color:#102c24'>"
+        "<h1>Вы отписаны от рассылки</h1>"
+        "<p>Мы больше не будем отправлять рекламные письма на этот адрес.</p>"
+        "<a href='/'>Вернуться на сайт</a></body></html>",
+        content_type="text/html; charset=utf-8",
+    )
 
 @csrf_exempt
 @require_http_methods(["POST"])

@@ -1,6 +1,12 @@
 from django.contrib import admin
+from django.conf import settings
+from django.core.mail import EmailMultiAlternatives, get_connection
+from django.utils import timezone
 from django.utils.html import format_html
-from .models import SiteSettings, Advantage, Route, RouteDeparture, Guide, Lead, Payment, Visit, CustomerProfile
+from .models import (
+    SiteSettings, Advantage, Route, RouteDeparture, Guide, Lead, Payment, Visit,
+    CustomerProfile, NewsletterSubscriber, NewsletterCampaign,
+)
 
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
@@ -147,3 +153,110 @@ class CustomerProfileAdmin(admin.ModelAdmin):
     list_display = ("user", "phone", "created_at")
     search_fields = ("user__email", "user__first_name", "user__last_name", "phone")
     readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(NewsletterSubscriber)
+class NewsletterSubscriberAdmin(admin.ModelAdmin):
+    list_display = ("email", "consent_state", "is_active", "consent_at", "unsubscribed_at")
+    list_filter = ("is_active", "consent", "consent_at")
+    search_fields = ("email", "consent_ip")
+    list_editable = ("is_active",)
+    readonly_fields = (
+        "email", "consent", "consent_text", "consent_ip", "consent_user_agent",
+        "consent_at", "unsubscribed_at", "unsubscribe_token",
+    )
+
+    @admin.display(description="Согласие")
+    def consent_state(self, obj):
+        css_class = "status-success" if obj.consent else "status-error"
+        label = "Получено" if obj.consent else "Нет"
+        return format_html('<span class="status-pill {}">{}</span>', css_class, label)
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(NewsletterCampaign)
+class NewsletterCampaignAdmin(admin.ModelAdmin):
+    list_display = ("subject", "status_badge", "sent_count", "failed_count", "created_at", "sent_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("subject", "body")
+    readonly_fields = ("status", "sent_count", "failed_count", "last_error", "created_at", "sent_at")
+    actions = ("send_to_subscribers",)
+
+    @admin.display(description="Статус", ordering="status")
+    def status_badge(self, obj):
+        classes = {
+            "draft": "status-neutral",
+            "sending": "status-waiting",
+            "sent": "status-success",
+            "partial": "status-waiting",
+            "error": "status-error",
+        }
+        return format_html(
+            '<span class="status-pill {}">{}</span>',
+            classes.get(obj.status, "status-neutral"),
+            obj.get_status_display(),
+        )
+
+    @admin.action(description="Отправить выбранную рассылку (не более 80 адресатов)")
+    def send_to_subscribers(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(request, "Выберите одну рассылку.", level="error")
+            return
+        campaign = queryset.first()
+        if campaign.status != "draft":
+            self.message_user(request, "Повторно можно отправить только копию рассылки в статусе «Черновик».", level="error")
+            return
+
+        subscribers = list(
+            NewsletterSubscriber.objects.filter(consent=True, is_active=True)
+            .order_by("consent_at")[:80]
+        )
+        if not subscribers:
+            self.message_user(request, "Нет активных подписчиков с подтверждённым согласием.", level="warning")
+            return
+
+        campaign.status = "sending"
+        campaign.last_error = ""
+        campaign.save(update_fields=("status", "last_error"))
+        sent = 0
+        errors = []
+        base_url = settings.PUBLIC_BASE_URL.rstrip("/")
+        connection = get_connection()
+        try:
+            connection.open()
+            for subscriber in subscribers:
+                unsubscribe_url = f"{base_url}/api/newsletter/unsubscribe/{subscriber.unsubscribe_token}"
+                body = (
+                    f"{campaign.body.strip()}\n\n"
+                    "Вы получили это письмо, потому что согласились на рекламную рассылку "
+                    "«Вольного Амура».\n"
+                    f"Отписаться: {unsubscribe_url}"
+                )
+                message = EmailMultiAlternatives(
+                    subject=campaign.subject,
+                    body=body,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[subscriber.email],
+                    connection=connection,
+                    headers={
+                        "List-Unsubscribe": f"<{unsubscribe_url}>",
+                        "Precedence": "bulk",
+                    },
+                )
+                try:
+                    sent += message.send(fail_silently=False)
+                except Exception as error:
+                    errors.append(f"{subscriber.email}: {str(error)[:180]}")
+        finally:
+            connection.close()
+
+        failed = len(subscribers) - sent
+        campaign.sent_count = sent
+        campaign.failed_count = failed
+        campaign.last_error = "\n".join(errors)[:4000]
+        campaign.sent_at = timezone.now()
+        campaign.status = "sent" if failed == 0 else ("partial" if sent else "error")
+        campaign.save(update_fields=("sent_count", "failed_count", "last_error", "sent_at", "status"))
+        self.message_user(request, f"Рассылка завершена: отправлено {sent}, ошибок {failed}.")

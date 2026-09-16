@@ -18,6 +18,8 @@ urlpatterns = [
     path("api/auth/logout", views.auth_logout_api),
     path("api/departures", views.departures_api),
     path("api/requests", views.request_api),
+    path("api/newsletter/subscribe", views.newsletter_subscribe_api),
+    path("api/newsletter/unsubscribe/<uuid:token>", views.newsletter_unsubscribe_api),
     path("api/payments/create", views.payment_create_api),
     path("api/payments/status/<uuid:public_id>", views.payment_status_api),
     path("api/payments/webhook", views.payment_webhook_api),
