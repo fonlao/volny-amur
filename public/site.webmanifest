@@ -1,0 +1,22 @@
+{
+  "name": "Вольный Амур",
+  "short_name": "Вольный Амур",
+  "description": "Авторские путешествия по Хабаровскому краю",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F4FAF7",
+  "theme_color": "#102C24",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
