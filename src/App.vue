@@ -409,7 +409,7 @@ onMounted(loadAccount)
     <header class="header">
       <a class="logo" href="#top" aria-label="Вольный Амур — главная"><span class="logo-mark">⌁</span><span>ВОЛЬНЫЙ<br><b>АМУР</b></span></a>
       <nav :class="['nav', { open: menuOpen }]">
-        <button @click="scrollTo('advantages')">О нас</button><button @click="scrollTo('routes')">Маршруты</button><button @click="scrollTo('route-map')">Карта</button><button @click="scrollTo('calendar')">Календарь</button><button @click="scrollTo('guides')">Наши специалисты</button>
+        <button @click="scrollTo('advantages')">О нас</button><button @click="scrollTo('routes')">Маршруты</button><button @click="scrollTo('guides')">Наши специалисты</button>
       </nav>
       <button class="header-cta" @click="scrollTo('request')">Подобрать маршрут <span>↗</span></button>
       <button class="account-button" type="button" @click="openAccount()"><span>◎</span>{{ account.authenticated ? account.user.name : 'Личный кабинет' }}</button>
@@ -420,18 +420,16 @@ onMounted(loadAccount)
     <main>
       <section id="top" class="hero">
         <div class="hero-art" aria-hidden="true">
-          <div class="sun"></div><div class="cloud c1"></div><div class="cloud c2"></div>
-          <div class="mountain m-back"></div><div class="mountain m-mid"></div><div class="mountain m-front"></div>
-          <div class="river"></div><div class="tree t1">▲</div><div class="tree t2">▲</div><div class="tree t3">▲</div><div class="tree t4">▲</div>
+          <img class="figma-sun" src="/figma/hero-sun.svg" alt="">
+          <img class="figma-mountains" src="/figma/hero-mountains.svg" alt="">
         </div>
         <div class="hero-grid">
           <div class="eyebrow"><span></span> {{ site.hero_eyebrow }}</div>
-          <h1>{{ splitTitle(site.hero_title).lead }}<br><em>{{ splitTitle(site.hero_title).accent }}</em></h1>
+          <h1>{{ site.hero_title }}</h1>
           <p class="hero-copy">{{ site.hero_text }}</p>
-          <button class="primary" @click="scrollTo('routes')">Исследовать маршруты <span>↓</span></button>
-          <div class="hero-note"><b>49°</b><span>северной широты<br>территория свободы</span></div>
+          <button class="primary" @click="scrollTo('routes')">Исследовать маршруты <span>↗</span></button>
+          <div class="hero-note"><span><b>49°</b> северной широты<br>территория свободы</span></div>
         </div>
-        <div class="scroll-label">ЛИСТАЙТЕ, ЧТОБЫ УЗНАТЬ БОЛЬШЕ <i></i></div>
       </section>
 
       <section id="advantages" class="advantages section-pad">
