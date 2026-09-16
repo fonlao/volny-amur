@@ -52,6 +52,13 @@ const guides = ref([
   { name: 'Михаил Серов', role: 'Горный проводник', exp: '38 восхождений', quote: 'В горах выбирает верный темп', initials: 'МС', color: 'dark' }
 ])
 
+const reviews = [
+  { name: 'Елена Орлова', city: 'Москва', route: 'Шантарские острова', date: 'Сентябрь 2025', text: 'Это была не просто поездка, а настоящая экспедиция. Киты подошли так близко, что мы забыли про камеры. Всё продумано до мелочей.', initials: 'ЕО', color: 'lime' },
+  { name: 'Илья Кузнецов', city: 'Хабаровск', route: 'Амурские протоки', date: 'Июль 2025', text: 'Идеальный формат для перезагрузки на выходных. Спокойная вода, красивые стоянки и гид, который знает каждую протоку.', initials: 'ИК', color: 'sky' },
+  { name: 'Марина Белова', city: 'Санкт-Петербург', route: 'Дуссе-Алинь', date: 'Август 2024', text: 'Сложный маршрут, который оказался по силам всей нашей группе. Спасибо за темп, заботу и чувство настоящего приключения.', initials: 'МБ', color: 'forest' },
+  { name: 'Александр Руденко', city: 'Владивосток', route: 'По следам тигра', date: 'Март 2025', text: 'Увидели следы тигра и услышали тайгу зимой. Вернулся домой с ощущением, что побывал в другом мире.', initials: 'АР', color: 'ink' }
+]
+
 const faqs = [
   { question: 'Что входит в стоимость путешествия?', answer: 'Трансферы по программе, проживание, питание на маршруте, работа специалистов, групповое снаряжение и средства спутниковой связи. Перелёт до Хабаровска оплачивается отдельно.' },
   { question: 'Нужна ли специальная физическая подготовка?', answer: 'Для каждого маршрута указан уровень сложности. Для лёгких программ достаточно обычной активности, а перед сложным треккингом специалист уточнит ваш опыт и поможет подготовиться.' },
@@ -409,7 +416,7 @@ onMounted(loadAccount)
     <header class="header">
       <a class="logo" href="#top" aria-label="Вольный Амур — главная"><span class="logo-mark">⌁</span><span>ВОЛЬНЫЙ<br><b>АМУР</b></span></a>
       <nav :class="['nav', { open: menuOpen }]">
-        <button @click="scrollTo('advantages')">О нас</button><button @click="scrollTo('routes')">Маршруты</button><button @click="scrollTo('guides')">Наши специалисты</button>
+        <button @click="scrollTo('advantages')">О нас</button><button @click="scrollTo('routes')">Маршруты</button><button @click="scrollTo('guides')">Наши специалисты</button><button @click="scrollTo('reviews')">Отзывы</button>
       </nav>
       <button class="header-cta" @click="scrollTo('request')">Подобрать маршрут <span>↗</span></button>
       <button class="account-button" type="button" @click="openAccount()"><span>◎</span>{{ account.authenticated ? account.user.name : 'Личный кабинет' }}</button>
@@ -519,8 +526,23 @@ onMounted(loadAccount)
         </div>
       </section>
 
+      <section id="reviews" class="reviews section-pad">
+        <div class="section-kicker">07 / ОТЗЫВЫ ПУТЕШЕСТВЕННИКОВ</div>
+        <div class="reviews-heading">
+          <div><h2>Нам доверяют<br><em>свои маршруты</em></h2><p>Истории тех, кто уже увидел Дальний Восток вместе с нами.</p></div>
+          <div class="review-score" aria-label="Средняя оценка 4,9 из 5"><strong>4.9</strong><span><b>★★★★★</b><small>средняя оценка</small></span></div>
+        </div>
+        <div class="review-grid">
+          <article v-for="review in reviews" :key="review.name" class="review-card">
+            <div class="review-card-head"><div :class="['review-avatar', review.color]">{{ review.initials }}</div><div><strong>{{ review.name }}</strong><span>{{ review.city }}</span></div><b class="review-stars" aria-label="5 из 5">★★★★★</b></div>
+            <p>«{{ review.text }}»</p>
+            <div class="review-meta"><span>{{ review.route }}</span><time>{{ review.date }}</time></div>
+          </article>
+        </div>
+      </section>
+
       <section id="faq" class="faq section-pad">
-        <div class="section-kicker">07 / ВАЖНО ЗНАТЬ</div>
+        <div class="section-kicker">08 / ВАЖНО ЗНАТЬ</div>
         <div class="faq-layout">
           <div class="faq-intro">
             <h2>Ответы на<br><em>частые вопросы</em></h2>
@@ -541,7 +563,7 @@ onMounted(loadAccount)
       </section>
 
       <section id="request" class="request section-pad">
-        <div class="request-copy"><div class="section-kicker light">08 / НАЧНЁМ?</div><h2>{{ splitTitle(site.request_title).lead }}<br><em>{{ splitTitle(site.request_title).accent }}</em></h2><p>{{ site.request_text }}</p><div class="contact-line"><span>или напишите нам</span><a :href="`mailto:${site.email}`">{{ site.email }}</a><a :href="`tel:${site.phone.replace(/[^+\d]/g, '')}`">{{ site.phone }}</a></div></div>
+        <div class="request-copy"><div class="section-kicker light">09 / НАЧНЁМ?</div><h2>{{ splitTitle(site.request_title).lead }}<br><em>{{ splitTitle(site.request_title).accent }}</em></h2><p>{{ site.request_text }}</p><div class="contact-line"><span>или напишите нам</span><a :href="`mailto:${site.email}`">{{ site.email }}</a><a :href="`tel:${site.phone.replace(/[^+\d]/g, '')}`">{{ site.phone }}</a></div></div>
         <form class="request-form" @submit.prevent="submitForm">
           <label>Как вас зовут?<input v-model.trim="form.name" required minlength="2" placeholder="Ваше имя"></label>
           <label>Телефон<input v-model.trim="form.phone" required pattern="[+0-9 ()-]{7,}" placeholder="+7 999 000-00-00"></label>
@@ -606,6 +628,6 @@ onMounted(loadAccount)
       <span>Обсудить маршрут</span><i>↗</i>
     </button>
 
-    <footer><a class="logo inverted" href="#top"><span class="logo-mark">⌁</span><span>ВОЛЬНЫЙ<br><b>АМУР</b></span></a><p>Путешествия по Хабаровскому краю<br>с 2014 года</p><div><a href="#routes">Маршруты</a><a href="#guides">Наши специалисты</a><a href="#advantages">О нас</a></div><small>© 2026 Вольный Амур</small></footer>
+    <footer><a class="logo inverted" href="#top"><span class="logo-mark">⌁</span><span>ВОЛЬНЫЙ<br><b>АМУР</b></span></a><p>Путешествия по Хабаровскому краю<br>с 2014 года</p><div><a href="#routes">Маршруты</a><a href="#guides">Наши специалисты</a><a href="#reviews">Отзывы</a><a href="#advantages">О нас</a></div><small>© 2026 Вольный Амур</small></footer>
   </div>
 </template>
