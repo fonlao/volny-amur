@@ -11,6 +11,13 @@ const departures = ref([])
 const activeCalendarMonth = ref('all')
 const departuresLoading = ref(true)
 const theme = ref('light')
+const accountOpen = ref(false)
+const accountMode = ref('login')
+const accountLoading = ref(false)
+const accountError = ref('')
+const account = ref({ authenticated: false, user: null, leads: [], payments: [] })
+const loginForm = ref({ email: '', password: '' })
+const registerForm = ref({ name: '', email: '', phone: '', password: '' })
 const sending = ref(false)
 const status = ref('')
 const paymentLoading = ref(false)
@@ -200,6 +207,104 @@ function initTheme() {
 
 initTheme()
 
+function getCookie(name) {
+  const item = document.cookie.split('; ').find(row => row.startsWith(`${name}=`))
+  return item ? decodeURIComponent(item.split('=').slice(1).join('=')) : ''
+}
+
+async function ensureCsrf() {
+  await fetch('/api/auth/csrf', { credentials: 'same-origin' })
+  return getCookie('csrftoken')
+}
+
+async function accountPost(url, payload = {}) {
+  const csrfToken = await ensureCsrf()
+  const response = await fetch(url, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify(payload)
+  })
+  const data = await response.json()
+  if (!response.ok) throw new Error(data.message || 'Не удалось выполнить действие')
+  return data
+}
+
+function applyAccountToRequest() {
+  if (!account.value.user) return
+  form.value.name = account.value.user.name || form.value.name
+  form.value.email = account.value.user.email || form.value.email
+  form.value.phone = account.value.user.phone || form.value.phone
+}
+
+async function loadAccount() {
+  try {
+    const response = await fetch('/api/auth/me', { credentials: 'same-origin' })
+    const data = await response.json()
+    account.value = data.authenticated
+      ? { authenticated: true, user: data.user, leads: data.leads || [], payments: data.payments || [] }
+      : { authenticated: false, user: null, leads: [], payments: [] }
+    applyAccountToRequest()
+  } catch (_) {
+    account.value = { authenticated: false, user: null, leads: [], payments: [] }
+  }
+}
+
+async function openAccount(mode = 'login') {
+  accountMode.value = mode
+  accountError.value = ''
+  accountOpen.value = true
+  document.body.classList.add('modal-open')
+  await loadAccount()
+}
+
+function closeAccount() {
+  accountOpen.value = false
+  accountError.value = ''
+  document.body.classList.remove('modal-open')
+}
+
+async function submitLogin() {
+  accountLoading.value = true
+  accountError.value = ''
+  try {
+    await accountPost('/api/auth/login', loginForm.value)
+    loginForm.value.password = ''
+    await loadAccount()
+  } catch (error) {
+    accountError.value = error.message
+  } finally {
+    accountLoading.value = false
+  }
+}
+
+async function submitRegistration() {
+  accountLoading.value = true
+  accountError.value = ''
+  try {
+    await accountPost('/api/auth/register', registerForm.value)
+    registerForm.value.password = ''
+    await loadAccount()
+  } catch (error) {
+    accountError.value = error.message
+  } finally {
+    accountLoading.value = false
+  }
+}
+
+async function logoutAccount() {
+  accountLoading.value = true
+  try {
+    await accountPost('/api/auth/logout')
+    account.value = { authenticated: false, user: null, leads: [], payments: [] }
+    accountMode.value = 'login'
+  } catch (error) {
+    accountError.value = error.message
+  } finally {
+    accountLoading.value = false
+  }
+}
+
 onMounted(async () => {
   try {
     const [contentResponse, departuresResponse] = await Promise.all([
@@ -296,6 +401,7 @@ async function checkPayment() {
 }
 
 onMounted(checkPayment)
+onMounted(loadAccount)
 </script>
 
 <template>
@@ -306,6 +412,7 @@ onMounted(checkPayment)
         <button @click="scrollTo('advantages')">О нас</button><button @click="scrollTo('routes')">Маршруты</button><button @click="scrollTo('route-map')">Карта</button><button @click="scrollTo('calendar')">Календарь</button><button @click="scrollTo('guides')">Наши специалисты</button>
       </nav>
       <button class="header-cta" @click="scrollTo('request')">Подобрать маршрут <span>↗</span></button>
+      <button class="account-button" type="button" @click="openAccount()"><span>◎</span>{{ account.authenticated ? account.user.name : 'Личный кабинет' }}</button>
       <button class="theme-toggle" type="button" :aria-label="theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'" :title="theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'" @click="toggleTheme"><span>{{ theme === 'dark' ? '☀' : '☾' }}</span></button>
       <button class="menu" @click="menuOpen = !menuOpen" aria-label="Меню">{{ menuOpen ? '×' : '☰' }}</button>
     </header>
@@ -455,6 +562,47 @@ onMounted(checkPayment)
         </form>
       </section>
     </main>
+
+    <div v-if="accountOpen" class="account-overlay" role="presentation" @click.self="closeAccount">
+      <section class="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title">
+        <button class="account-close" type="button" aria-label="Закрыть личный кабинет" @click="closeAccount">×</button>
+        <template v-if="!account.authenticated">
+          <div class="account-brand"><span>⌁</span><div><small>ВОЛЬНЫЙ АМУР</small><h2 id="account-title">{{ accountMode === 'login' ? 'Вход в кабинет' : 'Регистрация' }}</h2></div></div>
+          <div class="account-tabs">
+            <button :class="{ active: accountMode === 'login' }" @click="accountMode = 'login'; accountError = ''">Вход</button>
+            <button :class="{ active: accountMode === 'register' }" @click="accountMode = 'register'; accountError = ''">Регистрация</button>
+          </div>
+          <form v-if="accountMode === 'login'" class="account-form" @submit.prevent="submitLogin">
+            <label>E-mail<input v-model.trim="loginForm.email" type="email" autocomplete="email" required placeholder="name@example.ru"></label>
+            <label>Пароль<input v-model="loginForm.password" type="password" autocomplete="current-password" required placeholder="Ваш пароль"></label>
+            <button :disabled="accountLoading">{{ accountLoading ? 'Входим…' : 'Войти' }} <span>↗</span></button>
+          </form>
+          <form v-else class="account-form" @submit.prevent="submitRegistration">
+            <label>Имя<input v-model.trim="registerForm.name" autocomplete="name" required minlength="2" placeholder="Как к вам обращаться"></label>
+            <label>E-mail<input v-model.trim="registerForm.email" type="email" autocomplete="email" required placeholder="name@example.ru"></label>
+            <label>Телефон<input v-model.trim="registerForm.phone" autocomplete="tel" pattern="[+0-9 ()-]{7,}" placeholder="+7 999 000-00-00"></label>
+            <label>Пароль<input v-model="registerForm.password" type="password" autocomplete="new-password" minlength="8" required placeholder="Не менее 8 символов"></label>
+            <button :disabled="accountLoading">{{ accountLoading ? 'Создаём кабинет…' : 'Зарегистрироваться' }} <span>↗</span></button>
+          </form>
+          <p v-if="accountError" class="account-error">{{ accountError }}</p>
+          <p class="account-help">В кабинете сохраняются ваши заявки, даты заездов и платежи.</p>
+        </template>
+        <template v-else>
+          <div class="account-profile-head">
+            <div class="account-avatar">{{ account.user.name.slice(0, 1).toUpperCase() }}</div>
+            <div><small>ЛИЧНЫЙ КАБИНЕТ</small><h2 id="account-title">{{ account.user.name }}</h2><p>{{ account.user.email }}<br>{{ account.user.phone }}</p></div>
+            <button type="button" @click="logoutAccount">Выйти</button>
+          </div>
+          <div class="account-summary"><div><strong>{{ account.leads.length }}</strong><span>заявок</span></div><div><strong>{{ account.payments.length }}</strong><span>платежей</span></div></div>
+          <div class="account-history">
+            <section><h3>Мои заявки</h3><div v-if="account.leads.length" class="account-items"><article v-for="lead in account.leads" :key="lead.id"><div><strong>{{ lead.route }}</strong><span>{{ lead.departure }}</span></div><b>{{ lead.status }}</b><time>{{ lead.created_at }}</time></article></div><p v-else>Вы ещё не оставляли заявок.</p></section>
+            <section><h3>Мои платежи</h3><div v-if="account.payments.length" class="account-items"><article v-for="payment in account.payments" :key="payment.id"><div><strong>{{ payment.route }}</strong><span>{{ Number(payment.amount).toLocaleString('ru-RU') }} ₽</span></div><b :class="{ paid: payment.paid }">{{ payment.status }}</b><time>{{ payment.created_at }}</time></article></div><p v-else>Платежей пока нет.</p></section>
+          </div>
+          <button class="account-main-action" type="button" @click="closeAccount(); scrollTo('calendar')">Выбрать новый заезд <span>↗</span></button>
+          <p v-if="accountError" class="account-error">{{ accountError }}</p>
+        </template>
+      </section>
+    </div>
 
     <button class="floating-contact" aria-label="Оставить заявку" @click="scrollTo('request')">
       <span>Обсудить маршрут</span><i>↗</i>
