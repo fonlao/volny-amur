@@ -5,7 +5,7 @@ def dashboard_counts(request):
     if request.path != reverse("admin:index") or not request.user.is_authenticated or not request.user.is_staff:
         return {}
 
-    from .models import Lead, Payment, Route, RouteDeparture, Visit
+    from .models import Lead, Payment, Route, RouteDeparture, Visit, NewsletterSubscriber, NewsletterCampaign, TelegramContact, TelegramReservation
     from django.utils import timezone
     from django.db.models import Count
     from datetime import timedelta
@@ -40,6 +40,11 @@ def dashboard_counts(request):
             "visits_today": Visit.objects.filter(day=today).count(),
             "unique_today": Visit.objects.filter(day=today).values("session_key").distinct().count(),
             "visits_7_days": visits.count(),
+            "newsletter_subscribers": NewsletterSubscriber.objects.filter(consent=True, is_active=True).count(),
+            "newsletter_campaigns": NewsletterCampaign.objects.count(),
+            "telegram_subscribers": TelegramContact.objects.filter(is_active=True).count(),
+            "telegram_reservations": TelegramReservation.objects.count(),
+            "buyers": Payment.objects.filter(paid=True).values("email").distinct().count(),
             "daily_visits": daily_visits,
             "top_pages": top_pages,
         }

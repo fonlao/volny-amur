@@ -1,0 +1,18 @@
+[Unit]
+Description=Volny Amur Telegram bot
+After=network-online.target volny-amur.service
+Wants=network-online.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/volny-amur
+EnvironmentFile=/etc/volny-amur.env
+ExecStart=/opt/volny-amur/.venv/bin/python manage.py run_telegram_bot
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -235,6 +235,12 @@ class NewsletterCampaign(models.Model):
     ]
     subject = models.CharField("Тема письма", max_length=200)
     body = models.TextField("Текст письма")
+    image_1 = models.URLField("Изображение 1", blank=True, help_text="Прямая HTTPS-ссылка на изображение")
+    image_2 = models.URLField("Изображение 2", blank=True, help_text="Необязательно")
+    image_3 = models.URLField("Изображение 3", blank=True, help_text="Необязательно")
+    telegram_enabled = models.BooleanField("Отправлять в Telegram", default=True)
+    miniapp_url = models.URLField("Ссылка на мини-приложение", blank=True)
+    telegram_sent_count = models.PositiveSmallIntegerField("Отправлено в Telegram", default=0)
     status = models.CharField("Статус", max_length=20, choices=STATUS, default="draft")
     sent_count = models.PositiveSmallIntegerField("Успешно отправлено", default=0)
     failed_count = models.PositiveSmallIntegerField("Ошибок", default=0)
@@ -249,3 +255,37 @@ class NewsletterCampaign(models.Model):
 
     def __str__(self):
         return self.subject
+
+
+class TelegramContact(models.Model):
+    chat_id = models.BigIntegerField("Chat ID", unique=True)
+    username = models.CharField("Username", max_length=100, blank=True)
+    first_name = models.CharField("Имя", max_length=120, blank=True)
+    is_active = models.BooleanField("Получает сообщения", default=True)
+    started_at = models.DateTimeField("Первый запуск", auto_now_add=True)
+    last_seen_at = models.DateTimeField("Последняя активность", auto_now=True)
+
+    class Meta:
+        ordering = ("-last_seen_at",)
+        verbose_name = "Подписчик Telegram"
+        verbose_name_plural = "Подписчики Telegram"
+
+    def __str__(self):
+        return str(self.first_name or self.username or self.chat_id)
+
+
+class TelegramReservation(models.Model):
+    STATUS = [("new", "Новая"), ("paid", "Оплачена"), ("cancelled", "Отменена")]
+    contact = models.ForeignKey(TelegramContact, verbose_name="Подписчик", on_delete=models.CASCADE, related_name="reservations")
+    route = models.ForeignKey(Route, verbose_name="Маршрут", on_delete=models.PROTECT, related_name="telegram_reservations")
+    status = models.CharField("Статус", max_length=20, choices=STATUS, default="new")
+    payment = models.ForeignKey(Payment, verbose_name="Платёж", on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField("Создана", auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Запись из Telegram"
+        verbose_name_plural = "Записи из Telegram"
+
+    def __str__(self):
+        return f"{self.contact} — {self.route}"

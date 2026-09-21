@@ -6,6 +6,7 @@ from django.utils.html import format_html
 from .models import (
     SiteSettings, Advantage, Route, RouteDeparture, Guide, Lead, Payment, Visit,
     CustomerProfile, NewsletterSubscriber, NewsletterCampaign,
+    TelegramContact, TelegramReservation,
 )
 
 @admin.register(SiteSettings)
@@ -183,6 +184,11 @@ class NewsletterCampaignAdmin(admin.ModelAdmin):
     search_fields = ("subject", "body")
     readonly_fields = ("status", "sent_count", "failed_count", "last_error", "created_at", "sent_at")
     actions = ("send_to_subscribers",)
+    fieldsets = (
+        ("Содержание", {"fields": ("subject", "body", "image_1", "image_2", "image_3")}),
+        ("Telegram и мини-приложение", {"fields": ("telegram_enabled", "miniapp_url", "telegram_sent_count")}),
+        ("Результат", {"fields": ("status", "sent_count", "failed_count", "last_error", "created_at", "sent_at")}),
+    )
 
     @admin.display(description="Статус", ordering="status")
     def status_badge(self, obj):
@@ -213,10 +219,6 @@ class NewsletterCampaignAdmin(admin.ModelAdmin):
             NewsletterSubscriber.objects.filter(consent=True, is_active=True)
             .order_by("consent_at")[:80]
         )
-        if not subscribers:
-            self.message_user(request, "Нет активных подписчиков с подтверждённым согласием.", level="warning")
-            return
-
         campaign.status = "sending"
         campaign.last_error = ""
         campaign.save(update_fields=("status", "last_error"))
@@ -224,33 +226,34 @@ class NewsletterCampaignAdmin(admin.ModelAdmin):
         errors = []
         base_url = settings.PUBLIC_BASE_URL.rstrip("/")
         connection = get_connection()
-        try:
-            connection.open()
-            for subscriber in subscribers:
-                unsubscribe_url = f"{base_url}/api/newsletter/unsubscribe/{subscriber.unsubscribe_token}"
-                body = (
-                    f"{campaign.body.strip()}\n\n"
-                    "Вы получили это письмо, потому что согласились на рекламную рассылку "
-                    "«Вольного Амура».\n"
-                    f"Отписаться: {unsubscribe_url}"
-                )
-                message = EmailMultiAlternatives(
-                    subject=campaign.subject,
-                    body=body,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[subscriber.email],
-                    connection=connection,
-                    headers={
-                        "List-Unsubscribe": f"<{unsubscribe_url}>",
-                        "Precedence": "bulk",
-                    },
-                )
-                try:
-                    sent += message.send(fail_silently=False)
-                except Exception as error:
-                    errors.append(f"{subscriber.email}: {str(error)[:180]}")
-        finally:
-            connection.close()
+        if subscribers:
+            try:
+                connection.open()
+                for subscriber in subscribers:
+                    unsubscribe_url = f"{base_url}/api/newsletter/unsubscribe/{subscriber.unsubscribe_token}"
+                    body = (
+                        f"{campaign.body.strip()}\n\n"
+                        "Вы получили это письмо, потому что согласились на рекламную рассылку "
+                        "«Вольного Амура».\n"
+                        f"Отписаться: {unsubscribe_url}"
+                    )
+                    message = EmailMultiAlternatives(
+                        subject=campaign.subject,
+                        body=body,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        to=[subscriber.email],
+                        connection=connection,
+                        headers={
+                            "List-Unsubscribe": f"<{unsubscribe_url}>",
+                            "Precedence": "bulk",
+                        },
+                    )
+                    try:
+                        sent += message.send(fail_silently=False)
+                    except Exception as error:
+                        errors.append(f"{subscriber.email}: {str(error)[:180]}")
+            finally:
+                connection.close()
 
         failed = len(subscribers) - sent
         campaign.sent_count = sent
@@ -260,3 +263,31 @@ class NewsletterCampaignAdmin(admin.ModelAdmin):
         campaign.status = "sent" if failed == 0 else ("partial" if sent else "error")
         campaign.save(update_fields=("sent_count", "failed_count", "last_error", "sent_at", "status"))
         self.message_user(request, f"Рассылка завершена: отправлено {sent}, ошибок {failed}.")
+
+        if campaign.telegram_enabled:
+            from .telegram_bot import send_campaign_to_telegram
+            telegram_sent = send_campaign_to_telegram(campaign)
+            campaign.telegram_sent_count = telegram_sent
+            campaign.save(update_fields=("telegram_sent_count",))
+            self.message_user(request, f"В Telegram отправлено: {telegram_sent}.")
+
+
+@admin.register(TelegramContact)
+class TelegramContactAdmin(admin.ModelAdmin):
+    list_display = ("__str__", "chat_id", "username", "is_active", "started_at", "last_seen_at")
+    list_filter = ("is_active", "started_at")
+    search_fields = ("username", "first_name", "chat_id")
+    list_editable = ("is_active",)
+    readonly_fields = ("chat_id", "username", "first_name", "started_at", "last_seen_at")
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(TelegramReservation)
+class TelegramReservationAdmin(admin.ModelAdmin):
+    list_display = ("contact", "route", "status", "payment", "created_at")
+    list_filter = ("status", "route", "created_at")
+    search_fields = ("contact__username", "contact__first_name", "route__title")
+    list_editable = ("status",)
+    readonly_fields = ("created_at",)
