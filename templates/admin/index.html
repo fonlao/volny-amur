@@ -44,6 +44,21 @@
     <strong>{{ dashboard_stats.upcoming_departures }}</strong>
     <small>Календарь маршрутов ↗</small>
   </a>
+  <a class="stat-card" href="{% url 'admin:content_newslettersubscriber_changelist' %}">
+    <span class="stat-label">Подписчики новостей</span>
+    <strong>{{ dashboard_stats.newsletter_subscribers }}</strong>
+    <small>Подтвердили согласие ↗</small>
+  </a>
+  <a class="stat-card" href="{% url 'admin:content_telegramcontact_changelist' %}">
+    <span class="stat-label">Подписчики Telegram</span>
+    <strong>{{ dashboard_stats.telegram_subscribers }}</strong>
+    <small>Запустили бота ↗</small>
+  </a>
+  <a class="stat-card" href="{% url 'admin:content_payment_changelist' %}">
+    <span class="stat-label">Покупатели</span>
+    <strong>{{ dashboard_stats.buyers }}</strong>
+    <small>Оплатили бронирование ↗</small>
+  </a>
 </div>
 
 <section class="analytics-panel" aria-labelledby="analytics-title">
@@ -85,6 +100,10 @@
     <div class="dashboard-links">
       <a href="{% url 'admin:content_lead_changelist' %}">Заявки и уведомления <span>↗</span></a>
       <a href="{% url 'admin:content_payment_changelist' %}">Платежи ЮKassa <span>↗</span></a>
+      <a href="{% url 'admin:content_newslettersubscriber_changelist' %}">Подписчики рассылки <span>↗</span></a>
+      <a href="{% url 'admin:content_newslettercampaign_changelist' %}">Новостные рассылки <span>↗</span></a>
+      <a href="{% url 'admin:content_telegramcontact_changelist' %}">Подписчики Telegram <span>↗</span></a>
+      <a href="{% url 'admin:content_telegramreservation_changelist' %}">Записи из Telegram <span>↗</span></a>
     </div>
   </section>
 </div>
