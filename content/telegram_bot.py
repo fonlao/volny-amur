@@ -2,6 +2,7 @@ import json
 import logging
 import urllib.error
 import urllib.request
+import mimetypes
 from decimal import Decimal
 
 from django.conf import settings
@@ -30,6 +31,32 @@ def telegram_request(method, payload):
     return data.get("result")
 
 
+def telegram_upload(method, fields, file_path, field_name="photo"):
+    if not settings.TELEGRAM_BOT_TOKEN:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN не задан")
+    boundary = "----VolnyAmurTelegramBoundary"
+    parts = []
+    for key, value in fields.items():
+        parts.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{key}\"\r\n\r\n{value}\r\n".encode())
+    path = str(file_path)
+    mime = mimetypes.guess_type(path)[0] or "application/octet-stream"
+    filename = path.replace("\\", "/").rsplit("/", 1)[-1]
+    parts.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{field_name}\"; filename=\"{filename}\"\r\nContent-Type: {mime}\r\n\r\n".encode())
+    parts.append(open(path, "rb").read())
+    parts.append(f"\r\n--{boundary}--\r\n".encode())
+    request = urllib.request.Request(
+        f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/{method}",
+        data=b"".join(parts),
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    if not data.get("ok"):
+        raise RuntimeError(data.get("description", "Telegram API upload error"))
+    return data.get("result")
+
+
 def send_message(chat_id, text, reply_markup=None):
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
     if reply_markup:
@@ -38,7 +65,13 @@ def send_message(chat_id, text, reply_markup=None):
 
 
 def menu_markup():
-    return {"keyboard": [[{"text": item} for item in row] for row in MENU], "resize_keyboard": True}
+    keyboard = [[{"text": item} for item in row] for row in MENU]
+    miniapp_url = settings.TELEGRAM_MINIAPP_URL or (
+        f"{settings.PUBLIC_BASE_URL.rstrip('/')}/miniapp/" if settings.PUBLIC_BASE_URL else ""
+    )
+    if miniapp_url:
+        keyboard.insert(1, [{"text": "Открыть мини‑приложение", "web_app": {"url": miniapp_url}}])
+    return {"keyboard": keyboard, "resize_keyboard": True}
 
 
 def inline_routes():
@@ -93,6 +126,19 @@ def handle_update(update):
     user = (message.get("from") or callback.get("from"))
     chat_id = message["chat"]["id"]
     contact = upsert_contact(user)
+    web_app_data = message.get("web_app_data")
+    if web_app_data:
+        try:
+            payload = json.loads(web_app_data.get("data", "{}"))
+            if payload.get("action") == "route":
+                route = Route.objects.filter(title=payload.get("title"), is_active=True).first()
+                if route:
+                    TelegramReservation.objects.get_or_create(contact=contact, route=route, status="new")
+                    count = TelegramReservation.objects.filter(route=route, status__in=("new", "paid")).count()
+                    send_message(chat_id, f"Вы успешно записаны на маршрут «{route.title}».\nТекущее количество туристов: {count}. Группа стартует от 8 человек.", {"inline_keyboard": [[{"text": "Внести предоплату", "callback_data": f"pay:{route.pk}"}], [{"text": "Меню", "callback_data": "menu"}]]})
+                    return
+        except (ValueError, json.JSONDecodeError):
+            logger.warning("Invalid Telegram Web App payload")
     if callback:
         data = callback.get("data", "")
         telegram_request("answerCallbackQuery", {"callback_query_id": callback["id"]})
@@ -119,20 +165,20 @@ def handle_update(update):
                     send_message(chat_id, "Не удалось создать платёж. Напишите администратору бота.", menu_markup())
             return
     text = (message.get("text") or "").strip()
-    if text in ("/start", "/", "Меню"):
+    if text in ("/start", "/menu", "/", "Меню"):
         send_message(chat_id, "Добро пожаловать в «Вольный Амур»! Выберите действие:", menu_markup()); return
-    if text == "Выбрать маршрут":
+    if text in ("Выбрать маршрут", "/routes"):
         send_message(chat_id, "Выберите маршрут:", inline_routes()); return
     if text == "Внести предоплату":
         send_message(chat_id, "Сначала выберите маршрут:", inline_routes()); return
     if text in ("Предложить свой маршрут", "Написать админу бота"):
-        contact.username = f"{contact.username}|mode:{'route' if text.startswith('Предложить') else 'admin'}"
-        contact.save(update_fields=("username", "last_seen_at"))
+        contact.state = "route_proposal" if text.startswith("Предложить") else "admin_message"
+        contact.save(update_fields=("state", "last_seen_at"))
         send_message(chat_id, "Введите сообщение для оператора. Ваш текст будет доставлен, ожидайте ответ!", menu_markup()); return
-    if "|mode:route" in contact.username or "|mode:admin" in contact.username:
+    if contact.state in ("route_proposal", "admin_message"):
         operator_message(chat_id, text)
-        contact.username = contact.username.split("|mode:", 1)[0]
-        contact.save(update_fields=("username", "last_seen_at"))
+        contact.state = "idle"
+        contact.save(update_fields=("state", "last_seen_at"))
         send_message(chat_id, "Ваше сообщение успешно доставлено, ожидайте ответ!", menu_markup())
 
 
@@ -146,10 +192,10 @@ def send_campaign_to_telegram(campaign):
         markup["inline_keyboard"].append([{ "text": "Открыть мини‑апп", "web_app": {"url": campaign.miniapp_url or settings.TELEGRAM_MINIAPP_URL} }])
     for contact in contacts.iterator():
         try:
-            images = [url for url in (campaign.image_1, campaign.image_2, campaign.image_3) if url]
+            images = [image for image in (campaign.image_1, campaign.image_2, campaign.image_3) if image]
             if images:
-                media = [{"type": "photo", "media": url, "caption": campaign.body if index == 0 else ""} for index, url in enumerate(images)]
-                telegram_request("sendMediaGroup", {"chat_id": contact.chat_id, "media": media})
+                for image in images:
+                    telegram_upload("sendPhoto", {"chat_id": contact.chat_id}, image.path)
                 send_message(contact.chat_id, campaign.body, markup)
             else:
                 send_message(contact.chat_id, campaign.body, markup)
@@ -160,6 +206,18 @@ def send_campaign_to_telegram(campaign):
 
 
 def run_polling(stop_event=None):
+    miniapp_url = settings.TELEGRAM_MINIAPP_URL or (
+        f"{settings.PUBLIC_BASE_URL.rstrip('/')}/miniapp/" if settings.PUBLIC_BASE_URL else ""
+    )
+    telegram_request("setMyCommands", {"commands": [
+        {"command": "start", "description": "Запустить бота"},
+        {"command": "menu", "description": "Открыть главное меню"},
+        {"command": "routes", "description": "Выбрать маршрут"},
+    ]})
+    if miniapp_url:
+        telegram_request("setChatMenuButton", {
+            "menu_button": {"type": "web_app", "text": "Маршруты", "web_app": {"url": miniapp_url}}
+        })
     offset = 0
     while not stop_event or not stop_event.is_set():
         updates = telegram_request("getUpdates", {"timeout": 25, "offset": offset, "allowed_updates": ["message", "callback_query"]})

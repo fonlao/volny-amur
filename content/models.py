@@ -235,9 +235,9 @@ class NewsletterCampaign(models.Model):
     ]
     subject = models.CharField("Тема письма", max_length=200)
     body = models.TextField("Текст письма")
-    image_1 = models.URLField("Изображение 1", blank=True, help_text="Прямая HTTPS-ссылка на изображение")
-    image_2 = models.URLField("Изображение 2", blank=True, help_text="Необязательно")
-    image_3 = models.URLField("Изображение 3", blank=True, help_text="Необязательно")
+    image_1 = models.FileField("Изображение 1", upload_to="newsletter/%Y/%m/", blank=True, help_text="JPG, PNG или WebP")
+    image_2 = models.FileField("Изображение 2", upload_to="newsletter/%Y/%m/", blank=True, help_text="Необязательно")
+    image_3 = models.FileField("Изображение 3", upload_to="newsletter/%Y/%m/", blank=True, help_text="Необязательно")
     telegram_enabled = models.BooleanField("Отправлять в Telegram", default=True)
     miniapp_url = models.URLField("Ссылка на мини-приложение", blank=True)
     telegram_sent_count = models.PositiveSmallIntegerField("Отправлено в Telegram", default=0)
@@ -258,9 +258,15 @@ class NewsletterCampaign(models.Model):
 
 
 class TelegramContact(models.Model):
+    STATE = [
+        ("idle", "Ожидает команду"),
+        ("route_proposal", "Вводит предложение маршрута"),
+        ("admin_message", "Пишет администратору"),
+    ]
     chat_id = models.BigIntegerField("Chat ID", unique=True)
     username = models.CharField("Username", max_length=100, blank=True)
     first_name = models.CharField("Имя", max_length=120, blank=True)
+    state = models.CharField("Состояние диалога", max_length=30, choices=STATE, default="idle")
     is_active = models.BooleanField("Получает сообщения", default=True)
     started_at = models.DateTimeField("Первый запуск", auto_now_add=True)
     last_seen_at = models.DateTimeField("Последняя активность", auto_now=True)
@@ -280,6 +286,7 @@ class TelegramReservation(models.Model):
     route = models.ForeignKey(Route, verbose_name="Маршрут", on_delete=models.PROTECT, related_name="telegram_reservations")
     status = models.CharField("Статус", max_length=20, choices=STATUS, default="new")
     payment = models.ForeignKey(Payment, verbose_name="Платёж", on_delete=models.SET_NULL, null=True, blank=True)
+    payment_notified_at = models.DateTimeField("Уведомление об оплате отправлено", null=True, blank=True)
     created_at = models.DateTimeField("Создана", auto_now_add=True)
 
     class Meta:

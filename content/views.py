@@ -15,6 +15,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.http import FileResponse, HttpResponse, JsonResponse
+from django.shortcuts import render
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -243,11 +244,31 @@ def update_payment_from_yookassa(payment):
         )
         if created:
             transaction.on_commit(lambda: queue_lead_notification(lead.pk))
+        try:
+            from .models import TelegramReservation
+            from .telegram_bot import send_message
+            reservations = TelegramReservation.objects.filter(payment=payment, payment_notified_at__isnull=True).select_related("contact", "route")
+            for reservation in reservations:
+                send_message(
+                    reservation.contact.chat_id,
+                    f"✅ Вы успешно оплатили бронь на группу «{reservation.route.title}».\n"
+                    "Место подтверждено. Мы свяжемся с вами с деталями поездки.",
+                    {"inline_keyboard": [[{"text": "Меню", "callback_data": "menu"}]]},
+                )
+                reservation.payment_notified_at = timezone.now()
+                reservation.status = "paid"
+                reservation.save(update_fields=("payment_notified_at", "status"))
+        except Exception:
+            logger.exception("Telegram payment notification failed for payment_id=%s", payment.pk)
     return payment
 
 def frontend(request):
     index = Path(settings.BASE_DIR) / "dist" / "index.html"
     return FileResponse(index.open("rb"), content_type="text/html")
+
+
+def miniapp(request):
+    return render(request, "miniapp.html")
 
 @require_http_methods(["GET"])
 def content_api(request):

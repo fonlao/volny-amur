@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#102c24">
+  <title>Вольный Амур — маршруты</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    @font-face{font-family:Montserrat;src:url('/fonts/montserrat-400.ttf')}@font-face{font-family:Montserrat;src:url('/fonts/montserrat-700.ttf');font-weight:700}
+    *{box-sizing:border-box}body{margin:0;background:#f3f8f5;color:#102c24;font-family:Montserrat,Arial,sans-serif}.app{max-width:640px;margin:auto;padding:calc(18px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom))}
+    header{padding:24px;border-radius:26px;background:#102c24;color:white;overflow:hidden;position:relative}header:after{content:"";position:absolute;width:150px;height:150px;border-radius:50%;background:#c7ee65;opacity:.25;right:-45px;top:-55px}small{letter-spacing:2px;font-size:9px;color:#83cdda}h1{font-size:34px;line-height:1.02;margin:15px 0 10px}header p{font-size:12px;line-height:1.6;color:#bdd0c8;margin:0}.routes{display:grid;gap:12px;margin-top:16px}.card{border:1px solid #c9d8d0;border-radius:20px;background:white;padding:18px;box-shadow:0 10px 32px rgba(16,44,36,.06)}.top{display:flex;justify-content:space-between;gap:10px}.tag{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#27624d}.price{font-size:11px;font-weight:700}.card h2{font-size:21px;margin:10px 0}.meta{display:flex;gap:8px;flex-wrap:wrap}.meta span{background:#e8f3ef;border-radius:99px;padding:7px 9px;font-size:9px}.card p{font-size:11px;line-height:1.65;color:#60736c}.card button{width:100%;border:0;border-radius:12px;padding:14px;background:#27624d;color:white;font-weight:700;margin-top:8px}.empty{text-align:center;padding:50px 0;color:#60736c}
+  </style>
+</head>
+<body><main class="app"><header><small>ХАБАРОВСКИЙ КРАЙ · ДАЛЬНИЙ ВОСТОК</small><h1>Выберите своё путешествие</h1><p>Авторские маршруты по тайге, горам, островам и великому Амуру.</p></header><section id="routes" class="routes"><div class="empty">Загружаем маршруты…</div></section></main>
+<script>
+const tg=window.Telegram?.WebApp;tg?.ready();tg?.expand();
+fetch('/api/content').then(r=>r.json()).then(data=>{const root=document.querySelector('#routes');root.innerHTML='';data.routes.forEach((route,index)=>{const el=document.createElement('article');el.className='card';el.innerHTML=`<div class="top"><span class="tag">${route.tag}</span><span class="price">${route.price}</span></div><h2>${route.title}</h2><div class="meta"><span>${route.days}</span><span>${route.level}</span><span>${route.season}</span></div><p>${route.text}</p><button>Записаться в поход</button>`;el.querySelector('button').onclick=()=>{if(tg){tg.sendData(JSON.stringify({action:'route',title:route.title}));tg.close()}else{location.href='/?route='+encodeURIComponent(route.title)}};root.append(el)})}).catch(()=>document.querySelector('#routes').innerHTML='<div class="empty">Не удалось загрузить маршруты.</div>');
+</script></body></html>

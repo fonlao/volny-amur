@@ -179,10 +179,10 @@ class NewsletterSubscriberAdmin(admin.ModelAdmin):
 
 @admin.register(NewsletterCampaign)
 class NewsletterCampaignAdmin(admin.ModelAdmin):
-    list_display = ("subject", "status_badge", "sent_count", "failed_count", "created_at", "sent_at")
+    list_display = ("subject", "status_badge", "sent_count", "telegram_sent_count", "failed_count", "created_at", "sent_at")
     list_filter = ("status", "created_at")
     search_fields = ("subject", "body")
-    readonly_fields = ("status", "sent_count", "failed_count", "last_error", "created_at", "sent_at")
+    readonly_fields = ("status", "sent_count", "telegram_sent_count", "failed_count", "last_error", "created_at", "sent_at")
     actions = ("send_to_subscribers",)
     fieldsets = (
         ("Содержание", {"fields": ("subject", "body", "image_1", "image_2", "image_3")}),
@@ -274,11 +274,11 @@ class NewsletterCampaignAdmin(admin.ModelAdmin):
 
 @admin.register(TelegramContact)
 class TelegramContactAdmin(admin.ModelAdmin):
-    list_display = ("__str__", "chat_id", "username", "is_active", "started_at", "last_seen_at")
-    list_filter = ("is_active", "started_at")
+    list_display = ("__str__", "chat_id", "username", "state", "is_active", "started_at", "last_seen_at")
+    list_filter = ("is_active", "state", "started_at")
     search_fields = ("username", "first_name", "chat_id")
     list_editable = ("is_active",)
-    readonly_fields = ("chat_id", "username", "first_name", "started_at", "last_seen_at")
+    readonly_fields = ("chat_id", "username", "first_name", "state", "started_at", "last_seen_at")
 
     def has_add_permission(self, request):
         return False
@@ -290,4 +290,4 @@ class TelegramReservationAdmin(admin.ModelAdmin):
     list_filter = ("status", "route", "created_at")
     search_fields = ("contact__username", "contact__first_name", "route__title")
     list_editable = ("status",)
-    readonly_fields = ("created_at",)
+    readonly_fields = ("created_at", "payment_notified_at")

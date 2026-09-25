@@ -10,6 +10,7 @@ admin.site.index_title = "Содержание и заявки"
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("miniapp/", views.miniapp),
     path("api/content", views.content_api),
     path("api/auth/csrf", views.auth_csrf_api),
     path("api/auth/me", views.auth_me_api),
@@ -24,5 +25,6 @@ urlpatterns = [
     path("api/payments/status/<uuid:public_id>", views.payment_status_api),
     path("api/payments/webhook", views.payment_webhook_api),
     re_path(r"^assets/(?P<path>.*)$", serve, {"document_root": settings.BASE_DIR / "dist" / "assets"}),
+    re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
     re_path(r"^(?!admin/|api/|assets/).*$", views.frontend),
 ]
