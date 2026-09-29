@@ -237,8 +237,11 @@ def send_campaign_to_telegram(campaign):
             else:
                 send_message(contact.chat_id, campaign.body, markup)
             count += 1
-        except Exception:
+        except Exception as error:
             logger.exception("Telegram campaign failed for chat_id=%s", contact.chat_id)
+            if isinstance(error, urllib.error.HTTPError) and error.code in (400, 403):
+                contact.is_active = False
+                contact.save(update_fields=("is_active",))
     return count
 
 
