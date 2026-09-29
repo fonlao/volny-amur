@@ -15,7 +15,7 @@ from .models import NewsletterCampaign, Payment, Route, SiteSettings, TelegramCo
 from .views import yookassa_request
 
 logger = logging.getLogger(__name__)
-MENU = [["Выбрать маршрут"], ["Предложить свой маршрут"], ["Внести предоплату"], ["Написать админу бота"]]
+MENU = [["Выбрать направление"], ["Предложить свое направление"], ["Внести предоплату"], ["Написать админу бота"]]
 
 
 def urlopen_ipv4(request, timeout=30):
@@ -107,7 +107,7 @@ def menu_markup():
         f"{settings.PUBLIC_BASE_URL.rstrip('/')}/miniapp/" if settings.PUBLIC_BASE_URL else ""
     )
     if miniapp_url:
-        keyboard.insert(1, [{"text": "Открыть мини‑приложение", "web_app": {"url": miniapp_url}}])
+        keyboard.insert(1, [{"text": "Открыть мини-приложение", "web_app": {"url": miniapp_url}}])
     return {"keyboard": keyboard, "resize_keyboard": True}
 
 
@@ -204,11 +204,11 @@ def handle_update(update):
     text = (message.get("text") or "").strip()
     if text in ("/start", "/menu", "/", "Меню"):
         send_message(chat_id, "Добро пожаловать в «Вольный Амур»! Выберите действие:", menu_markup()); return
-    if text in ("Выбрать маршрут", "/routes"):
+    if text in ("Выбрать направление", "Выбрать маршрут", "/routes"):
         send_message(chat_id, "Выберите маршрут:", inline_routes()); return
     if text == "Внести предоплату":
         send_message(chat_id, "Сначала выберите маршрут:", inline_routes()); return
-    if text in ("Предложить свой маршрут", "Написать админу бота"):
+    if text in ("Предложить свое направление", "Предложить свой маршрут", "Написать админу бота"):
         contact.state = "route_proposal" if text.startswith("Предложить") else "admin_message"
         contact.save(update_fields=("state", "last_seen_at"))
         send_message(chat_id, "Введите сообщение для оператора. Ваш текст будет доставлен, ожидайте ответ!", menu_markup()); return
@@ -226,7 +226,7 @@ def send_campaign_to_telegram(campaign):
     count = 0
     markup = {"inline_keyboard": [[{"text": "Меню", "callback_data": "menu"}, {"text": "Маршруты", "callback_data": "routes"}]]}
     if campaign.miniapp_url or settings.TELEGRAM_MINIAPP_URL:
-        markup["inline_keyboard"].append([{ "text": "Открыть мини‑апп", "web_app": {"url": campaign.miniapp_url or settings.TELEGRAM_MINIAPP_URL} }])
+        markup["inline_keyboard"].append([{ "text": "Открыть мини-приложение", "web_app": {"url": campaign.miniapp_url or settings.TELEGRAM_MINIAPP_URL} }])
     for contact in contacts.iterator():
         try:
             images = [image for image in (campaign.image_1, campaign.image_2, campaign.image_3) if image]
@@ -253,7 +253,7 @@ def run_polling(stop_event=None):
         telegram_request("setMyCommands", {"commands": [
             {"command": "start", "description": "Запустить бота"},
             {"command": "menu", "description": "Открыть главное меню"},
-            {"command": "routes", "description": "Выбрать маршрут"},
+            {"command": "routes", "description": "Выбрать направление"},
         ]})
         if miniapp_url:
             telegram_request("setChatMenuButton", {
