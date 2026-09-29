@@ -2,6 +2,8 @@ import json
 import logging
 import urllib.error
 import urllib.request
+import socket
+import time
 import mimetypes
 from decimal import Decimal
 
@@ -16,6 +18,19 @@ logger = logging.getLogger(__name__)
 MENU = [["Выбрать маршрут"], ["Предложить свой маршрут"], ["Внести предоплату"], ["Написать админу бота"]]
 
 
+def urlopen_ipv4(request, timeout=30):
+    original_getaddrinfo = socket.getaddrinfo
+
+    def ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+        return original_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+
+    socket.getaddrinfo = ipv4_getaddrinfo
+    try:
+        return urllib.request.urlopen(request, timeout=timeout)
+    finally:
+        socket.getaddrinfo = original_getaddrinfo
+
+
 def telegram_request(method, payload):
     if not settings.TELEGRAM_BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN не задан")
@@ -24,7 +39,7 @@ def telegram_request(method, payload):
         f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/{method}",
         data=body, headers={"Content-Type": "application/json"}, method="POST",
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urlopen_ipv4(request, timeout=30) as response:
         data = json.loads(response.read().decode("utf-8"))
     if not data.get("ok"):
         raise RuntimeError(data.get("description", "Telegram API error"))
@@ -50,7 +65,7 @@ def telegram_upload(method, fields, file_path, field_name="photo"):
         headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=60) as response:
+    with urlopen_ipv4(request, timeout=60) as response:
         data = json.loads(response.read().decode("utf-8"))
     if not data.get("ok"):
         raise RuntimeError(data.get("description", "Telegram API upload error"))
@@ -220,7 +235,12 @@ def run_polling(stop_event=None):
         })
     offset = 0
     while not stop_event or not stop_event.is_set():
-        updates = telegram_request("getUpdates", {"timeout": 25, "offset": offset, "allowed_updates": ["message", "callback_query"]})
+        try:
+            updates = telegram_request("getUpdates", {"timeout": 25, "offset": offset, "allowed_updates": ["message", "callback_query"]})
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            logger.warning("Telegram polling network error: %s", error)
+            time.sleep(5)
+            continue
         for update in updates:
             offset = update["update_id"] + 1
             try:

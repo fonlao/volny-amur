@@ -183,7 +183,7 @@ class NewsletterCampaignAdmin(admin.ModelAdmin):
     list_filter = ("status", "created_at")
     search_fields = ("subject", "body")
     readonly_fields = ("status", "sent_count", "telegram_sent_count", "failed_count", "last_error", "created_at", "sent_at")
-    actions = ("send_to_subscribers",)
+    actions = ("send_to_subscribers", "send_to_telegram_only")
     fieldsets = (
         ("Содержание", {"fields": ("subject", "body", "image_1", "image_2", "image_3")}),
         ("Telegram и мини-приложение", {"fields": ("telegram_enabled", "miniapp_url", "telegram_sent_count")}),
@@ -270,6 +270,22 @@ class NewsletterCampaignAdmin(admin.ModelAdmin):
             campaign.telegram_sent_count = telegram_sent
             campaign.save(update_fields=("telegram_sent_count",))
             self.message_user(request, f"В Telegram отправлено: {telegram_sent}.")
+
+    @admin.action(description="Отправить выбранную рассылку только в Telegram")
+    def send_to_telegram_only(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(request, "Выберите одну рассылку.", level="error")
+            return
+        campaign = queryset.first()
+        from .telegram_bot import send_campaign_to_telegram
+        try:
+            telegram_sent = send_campaign_to_telegram(campaign)
+        except Exception as error:
+            self.message_user(request, f"Ошибка Telegram: {error}", level="error")
+            return
+        campaign.telegram_sent_count = telegram_sent
+        campaign.save(update_fields=("telegram_sent_count",))
+        self.message_user(request, f"В Telegram отправлено: {telegram_sent}.")
 
 
 @admin.register(TelegramContact)
