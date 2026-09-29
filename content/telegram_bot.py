@@ -39,8 +39,19 @@ def telegram_request(method, payload):
         f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/{method}",
         data=body, headers={"Content-Type": "application/json"}, method="POST",
     )
-    with urlopen_ipv4(request, timeout=30) as response:
-        data = json.loads(response.read().decode("utf-8"))
+    last_error = None
+    for attempt in range(3):
+        try:
+            with urlopen_ipv4(request, timeout=30) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            break
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            last_error = error
+            if attempt == 2:
+                raise
+            time.sleep(2 ** attempt)
+    else:
+        raise last_error
     if not data.get("ok"):
         raise RuntimeError(data.get("description", "Telegram API error"))
     return data.get("result")
@@ -65,8 +76,19 @@ def telegram_upload(method, fields, file_path, field_name="photo"):
         headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
         method="POST",
     )
-    with urlopen_ipv4(request, timeout=60) as response:
-        data = json.loads(response.read().decode("utf-8"))
+    last_error = None
+    for attempt in range(3):
+        try:
+            with urlopen_ipv4(request, timeout=60) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            break
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            last_error = error
+            if attempt == 2:
+                raise
+            time.sleep(2 ** attempt)
+    else:
+        raise last_error
     if not data.get("ok"):
         raise RuntimeError(data.get("description", "Telegram API upload error"))
     return data.get("result")
@@ -224,15 +246,18 @@ def run_polling(stop_event=None):
     miniapp_url = settings.TELEGRAM_MINIAPP_URL or (
         f"{settings.PUBLIC_BASE_URL.rstrip('/')}/miniapp/" if settings.PUBLIC_BASE_URL else ""
     )
-    telegram_request("setMyCommands", {"commands": [
-        {"command": "start", "description": "Запустить бота"},
-        {"command": "menu", "description": "Открыть главное меню"},
-        {"command": "routes", "description": "Выбрать маршрут"},
-    ]})
-    if miniapp_url:
-        telegram_request("setChatMenuButton", {
-            "menu_button": {"type": "web_app", "text": "Маршруты", "web_app": {"url": miniapp_url}}
-        })
+    try:
+        telegram_request("setMyCommands", {"commands": [
+            {"command": "start", "description": "Запустить бота"},
+            {"command": "menu", "description": "Открыть главное меню"},
+            {"command": "routes", "description": "Выбрать маршрут"},
+        ]})
+        if miniapp_url:
+            telegram_request("setChatMenuButton", {
+                "menu_button": {"type": "web_app", "text": "Маршруты", "web_app": {"url": miniapp_url}}
+            })
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        logger.warning("Telegram startup configuration deferred: %s", error)
     offset = 0
     while not stop_event or not stop_event.is_set():
         try:
